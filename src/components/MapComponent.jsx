@@ -1,9 +1,14 @@
 import { useEffect, useRef } from "react";
-import { MapContainer, TileLayer, GeoJSON, useMap } from "react-leaflet";
+import { MapContainer, ImageOverlay, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { getStyle } from "../lib/colors";
 import Legend from "./Legend";
-import RTPopup from "./RTPopup";
+import mapReference from "../assets/Peta Batas RT_page-0001.jpg";
+
+const imageBounds = [
+  [-1.267, 116.835],
+  [-1.249, 116.858],
+];
 
 // Component to fit map bounds to GeoJSON data
 function FitBounds({ geoJsonData }) {
@@ -11,21 +16,9 @@ function FitBounds({ geoJsonData }) {
   const fitted = useRef(false);
 
   useEffect(() => {
-    if (!fitted.current && geoJsonData?.features?.length > 0) {
-      // Calculate bounds from all polygons
-      const coords = geoJsonData.features.flatMap((f) =>
-        f.geometry.coordinates[0].map((c) => [c[1], c[0]])
-      );
-      if (coords.length > 0) {
-        const lats = coords.map((c) => c[0]);
-        const lngs = coords.map((c) => c[1]);
-        const bounds = [
-          [Math.min(...lats), Math.min(...lngs)],
-          [Math.max(...lats), Math.max(...lngs)],
-        ];
-        map.fitBounds(bounds, { padding: [50, 50] });
-        fitted.current = true;
-      }
+    if (!fitted.current) {
+      map.fitBounds(imageBounds, { padding: [20, 20] });
+      fitted.current = true;
     }
   }, [geoJsonData, map]);
 
@@ -33,8 +26,8 @@ function FitBounds({ geoJsonData }) {
 }
 
 export default function MapComponent({ geoJsonData, onFeatureClick }) {
-  // Default center (Balikpan area) — will be overridden by FitBounds
-  const defaultCenter = [-1.2590, 116.8310];
+  // Default center (Gunung Sari Ulu, Balikpapan Tengah) — will be overridden by FitBounds
+  const defaultCenter = [-1.2569, 116.8468];
   const defaultZoom = 16;
 
   return (
@@ -42,18 +35,18 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
       center={defaultCenter}
       zoom={defaultZoom}
       className="map-container"
-      zoomControl={true}
+      zoomControl={false}
+      scrollWheelZoom={false}
+      doubleClickZoom={false}
+      touchZoom={false}
+      dragging={false}
     >
-      {/* Satellite imagery base layer (Esri World Imagery — free) */}
-      <TileLayer
-        attribution='&copy; <a href="https://www.esri.com">Esri</a>'
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-      />
-
-      {/* Optional: road labels overlay */}
-      <TileLayer
-        url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-        opacity={0.5}
+      {/* Reference map image for Gunung Sari Ulu */}
+      <ImageOverlay
+        url={mapReference}
+        bounds={imageBounds}
+        opacity={1}
+        zIndex={0}
       />
 
       {/* GeoJSON choropleth layer */}
@@ -66,14 +59,14 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
             mouseover: (e) => {
               const target = e.target;
               target.setStyle({
-                weight: 3,
-                color: "#333",
+                weight: 2.5,
+                color: "#ffffff",
                 dashArray: "",
-                fillOpacity: 0.8,
+                fillOpacity: 0.86,
               });
               target.bringToFront();
             },
-            mouseout: (e) => {
+            mouseout: () => {
               layer.setStyle(getStyle(feature));
             },
             click: () => {
@@ -90,6 +83,13 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
             </div>`,
             { className: "custom-popup" }
           );
+
+          layer.bindTooltip(`${feature.properties.rt_number}`, {
+            permanent: true,
+            direction: "center",
+            className: "rt-label",
+            sticky: false,
+          });
         }}
       />
 

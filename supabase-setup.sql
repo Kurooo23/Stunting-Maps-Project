@@ -10,7 +10,7 @@
 CREATE TABLE rt_boundaries (
   id SERIAL PRIMARY KEY,
   rt_number TEXT NOT NULL,
-  kelurahan TEXT NOT NULL DEFAULT 'Damai',
+  kelurahan TEXT NOT NULL DEFAULT 'Gunung Sari Ulu',
   geometry JSONB NOT NULL,  -- GeoJSON Polygon
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -87,8 +87,8 @@ CREATE TRIGGER trigger_stunting_updated_at
 -- CONTOH: Insert data batas RT (ganti koordinat dengan data asli)
 -- ============================================================
 -- INSERT INTO rt_boundaries (rt_number, kelurahan, geometry) VALUES
--- ('01', 'Damai', '{"type":"Polygon","coordinates":[[[116.827,-1.255],[116.829,-1.255],[116.829,-1.2565],[116.827,-1.2565],[116.827,-1.255]]]}'),
--- ('02', 'Damai', '{"type":"Polygon","coordinates":[[[116.829,-1.255],[116.831,-1.255],[116.831,-1.2565],[116.829,-1.2565],[116.829,-1.255]]]}');
+-- ('01', 'Gunung Sari Ulu', '{"type":"Polygon","coordinates":[[[116.827,-1.255],[116.829,-1.255],[116.829,-1.2565],[116.827,-1.2565],[116.827,-1.255]]]}'),
+-- ('02', 'Gunung Sari Ulu', '{"type":"Polygon","coordinates":[[[116.829,-1.255],[116.831,-1.255],[116.831,-1.2565],[116.829,-1.2565],[116.829,-1.255]]]}');
 --
 -- CONTOH: Insert data stunting (diisi oleh kader)
 -- INSERT INTO stunting_data (rt_number, stunting_count, period) VALUES

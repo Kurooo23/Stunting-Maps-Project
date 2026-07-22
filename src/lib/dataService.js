@@ -1,11 +1,10 @@
 import { supabase } from "./supabase";
-import rtGeoJsonLocal from "../data/rtGeoJson";
+import rtGeoJson from "../data/rtGeoJson";
 
 // ============================================================
 // Data Service Layer
 // ============================================================
-// Handles fetching and inserting data.
-// Falls back to local GeoJSON when Supabase isn't configured.
+// Handles fetching and inserting data from Supabase.
 // ============================================================
 
 const isSupabaseConfigured = () => {
@@ -13,48 +12,74 @@ const isSupabaseConfigured = () => {
   return url && url !== "YOUR_SUPABASE_URL" && url !== "https://your-project.supabase.co";
 };
 
+const normalizeRTNumber = (value) => String(value).trim().padStart(2, "0");
+
+const toGeometry = (geometry) => (
+  typeof geometry === "string" ? JSON.parse(geometry) : geometry
+);
+
+const toGeoJson = (boundaries = [], cases = []) => {
+  const casesByRT = new Map(
+    cases.map((row) => [normalizeRTNumber(row.rt_number), row])
+  );
+
+  return {
+    type: "FeatureCollection",
+    features: boundaries.map((boundary) => {
+      const rtNumber = normalizeRTNumber(boundary.rt_number);
+      const caseData = casesByRT.get(rtNumber);
+
+      return {
+        type: "Feature",
+        properties: {
+          rt_number: boundary.rt_number,
+          stunting_count: caseData?.stunting_count ?? 0,
+          kelurahan: boundary.kelurahan || "Gunung Sari Ulu",
+          period: caseData?.period,
+          updated_at: caseData?.updated_at,
+        },
+        geometry: toGeometry(boundary.geometry),
+      };
+    }),
+  };
+};
+
 /**
  * Fetch RT data with latest stunting counts.
  * Returns GeoJSON FeatureCollection format.
- * Falls back to local data if Supabase is not configured.
  */
 export async function fetchRTData() {
   if (!isSupabaseConfigured()) {
-    console.log("[DataService] Supabase not configured, using local GeoJSON data.");
-    return rtGeoJsonLocal;
+    console.warn("[DataService] Supabase belum dikonfigurasi, pakai data lokal.");
+    return rtGeoJson;
   }
 
   try {
-    const { data, error } = await supabase
-      .from("latest_stunting")
-      .select("*")
-      .order("rt_number");
+    const [{ data: boundaries, error: boundariesError }, { data: cases, error: casesError }] =
+      await Promise.all([
+        supabase
+          .from("rt_boundaries")
+          .select("rt_number, kelurahan, geometry")
+          .order("rt_number"),
+        supabase
+          .from("latest_stunting")
+          .select("rt_number, stunting_count, period, updated_at")
+          .order("rt_number"),
+      ]);
 
-    if (error) throw error;
-    if (!data || data.length === 0) {
-      console.log("[DataService] No data from Supabase, using local fallback.");
-      return rtGeoJsonLocal;
+    if (boundariesError) throw boundariesError;
+    if (casesError) throw casesError;
+
+    // Fallback ke data lokal jika Supabase belum berisi data batas RT
+    if (!boundaries || boundaries.length === 0) {
+      console.warn("[DataService] rt_boundaries kosong di Supabase, pakai data lokal.");
+      return rtGeoJson;
     }
 
-    // Convert Supabase rows to GeoJSON FeatureCollection
-    const features = data.map((row) => ({
-      type: "Feature",
-      properties: {
-        rt_number: row.rt_number,
-        stunting_count: row.stunting_count,
-        kelurahan: row.kelurahan || "Damai",
-        period: row.period,
-        updated_at: row.updated_at,
-      },
-      geometry: typeof row.geometry === "string"
-        ? JSON.parse(row.geometry)
-        : row.geometry,
-    }));
-
-    return { type: "FeatureCollection", features };
+    return toGeoJson(boundaries, cases);
   } catch (err) {
     console.error("[DataService] Error fetching data:", err.message);
-    return rtGeoJsonLocal;
+    return rtGeoJson;
   }
 }
 
@@ -86,12 +111,28 @@ export async function submitStuntingData({ rtNumber, stuntingCount, period, note
 }
 
 /**
- * Get list of all RT numbers (for the dropdown).
+ * Get list of all RT numbers from Supabase boundaries (for the dropdown).
  */
-export function getRTNumbers() {
-  return rtGeoJsonLocal.features.map((f) => f.properties.rt_number).sort(
-    (a, b) => Number(a) - Number(b)
-  );
+export async function getRTNumbers() {
+  if (!isSupabaseConfigured()) {
+    return rtGeoJson.features.map((f) => f.properties.rt_number).sort();
+  }
+
+  const { data, error } = await supabase
+    .from("rt_boundaries")
+    .select("rt_number")
+    .order("rt_number");
+
+  if (error) {
+    console.error("[DataService] Error fetching RT numbers:", error.message);
+    return rtGeoJson.features.map((f) => f.properties.rt_number).sort();
+  }
+
+  if (!data || data.length === 0) {
+    return rtGeoJson.features.map((f) => f.properties.rt_number).sort();
+  }
+
+  return data.map((row) => row.rt_number);
 }
 
 /**

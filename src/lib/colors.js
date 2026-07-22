@@ -8,9 +8,9 @@
 // ============================================================
 
 export function getColor(stuntingCount) {
-  if (stuntingCount === 0) return "#4CAF50"; // green
-  if (stuntingCount <= 2) return "#FFC107"; // yellow/amber
-  return "#F44336"; // red
+  if (stuntingCount === 0) return "#18aa3b";
+  if (stuntingCount <= 2) return "#ffd21f";
+  return "#ef3030";
 }
 
 export function getColorLabel(stuntingCount) {
@@ -22,10 +22,11 @@ export function getColorLabel(stuntingCount) {
 export function getStyle(feature) {
   return {
     fillColor: getColor(feature.properties.stunting_count),
-    weight: 2,
+    weight: 1.4,
     opacity: 1,
     color: "white",
-    dashArray: "",
-    fillOpacity: 0.6,
+    dashArray: null,
+    lineJoin: "round",
+    fillOpacity: 0.72,
   };
 }

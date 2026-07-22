@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>RT Digitizer - Gunung Sari Ulu</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; }
+    #map { flex: 1; z-index: 1; }
+    #panel {
+      width: 340px; background: #1a1a2e; color: #eee; padding: 16px;
+      overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    }
+    h2 { font-size: 1rem; color: #7fdbca; margin-bottom: 4px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .row label { font-size: 0.85rem; min-width: 50px; }
+    input, select {
+      background: #16213e; color: #eee; border: 1px solid #333;
+      padding: 6px 10px; border-radius: 4px; font-size: 0.9rem;
+    }
+    input[type=number] { width: 70px; }
+    button {
+      background: #0f3460; color: #eee; border: none; padding: 8px 14px;
+      border-radius: 4px; cursor: pointer; font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+    button:hover { background: #1a5276; }
+    button.primary { background: #e94560; }
+    button.primary:hover { background: #c0392b; }
+    button.success { background: #18aa3b; }
+    button.success:hover { background: #148f31; }
+    .info { font-size: 0.8rem; color: #888; line-height: 1.4; }
+    .completed-list {
+      max-height: 200px; overflow-y: auto; font-size: 0.8rem;
+      background: #16213e; border-radius: 4px; padding: 8px;
+    }
+    .completed-item {
+      display: flex; justify-content: space-between; padding: 3px 0;
+      border-bottom: 1px solid #222;
+    }
+    .coord-display {
+      font-family: monospace; font-size: 0.8rem; color: #7fdbca;
+      background: #16213e; padding: 6px; border-radius: 4px;
+    }
+    #export-area {
+      width: 100%; height: 120px; background: #16213e; color: #7fdbca;
+      border: 1px solid #333; border-radius: 4px; padding: 8px;
+      font-family: monospace; font-size: 0.7rem; resize: vertical;
+    }
+    .badge {
+      display: inline-block; background: #e94560; color: white;
+      border-radius: 10px; padding: 1px 8px; font-size: 0.75rem;
+    }
+    .section { border-top: 1px solid #333; padding-top: 10px; }
+  </style>
+</head>
+<body>
+  <div id="panel">
+    <h2>RT Digitizer - Gunung Sari Ulu</h2>
+    <p class="info">Klik di peta untuk menambah vertex polygon. Trace batas RT sesuai garis putih di peta referensi.</p>
+
+    <div class="section">
+      <div class="row">
+        <label>RT #:</label>
+        <input type="number" id="rtNumber" min="1" max="41" value="1" />
+        <button onclick="prevRT()">◄</button>
+        <button onclick="nextRT()">►</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="row" style="flex-wrap: wrap;">
+        <button class="success" onclick="completePolygon()">Selesai Polygon (Enter)</button>
+        <button onclick="undoVertex()">Undo (Ctrl+Z)</button>
+        <button onclick="clearCurrent()">Clear</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="row">
+        <label>Opacity:</label>
+        <input type="range" id="opacitySlider" min="0" max="100" value="70"
+               oninput="setOverlayOpacity(this.value)" style="flex:1" />
+        <span id="opacityVal">70%</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Kursor <span class="badge" id="vertexCount">0</span></h2>
+      <div class="coord-display" id="coordDisplay">Hover di peta...</div>
+    </div>
+
+    <div class="section">
+      <h2>RT Selesai <span class="badge" id="completedCount">0</span>/41</h2>
+      <div class="completed-list" id="completedList">
+        <span class="info">Belum ada RT yang didigitasi.</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>Export</h2>
+      <div class="row">
+        <button class="primary" onclick="exportGeoJson()">Export GeoJSON</button>
+        <button onclick="copyToClipboard()">Copy</button>
+      </div>
+      <textarea id="export-area" readonly placeholder="Klik Export untuk melihat GeoJSON..."></textarea>
+    </div>
+
+    <div class="section">
+      <h2>Import</h2>
+      <div class="row">
+        <button onclick="importFromFile()">Load dari File</button>
+      </div>
+      <input type="file" id="importFile" accept=".json,.geojson" style="display:none"
+             onchange="handleImport(event)" />
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    // ─── Config ───
+    const imageBounds = [[-1.267, 116.835], [-1.249, 116.858]];
+    const mapCenter = [-1.2569, 116.8468];
+    const defaultZoom = 17;
+
+    // ─── State ───
+    let currentRT = '01';
+    let currentVertices = [];
+    let currentMarkers = [];
+    let currentPolyline = null;
+    let completedRTs = {};
+    let completedLayers = {};
+
+    // ─── Map Setup ───
+    const map = L.map('map', {
+      center: mapCenter,
+      zoom: defaultZoom,
+      zoomControl: true,
+    });
+
+    // Tile layer (satellite) for reference
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      attribution: 'Esri',
+      maxZoom: 20,
+    }).addTo(map);
+
+    // Reference image overlay
+    const overlay = L.imageOverlay('peta-ref.jpg', imageBounds, {
+      opacity: 0.7,
+      zIndex: 10,
+    }).addTo(map);
+
+    // ─── Event Handlers ───
+    map.on('mousemove', function(e) {
+      document.getElementById('coordDisplay').textContent =
+        `Lat: ${e.latlng.lat.toFixed(6)}, Lng: ${e.latlng.lng.toFixed(6)}`;
+    });
+
+    map.on('click', function(e) {
+      addVertex(e.latlng);
+    });
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') completePolygon();
+      if (e.key === 'z' && e.ctrlKey) undoVertex();
+    });
+
+    // ─── Functions ───
+    function addVertex(latlng) {
+      currentVertices.push([latlng.lng, latlng.lat]);
+
+      // Add marker
+      const marker = L.circleMarker(latlng, {
+        radius: 4, fillColor: '#e94560', color: '#fff',
+        weight: 1, fillOpacity: 1,
+      }).addTo(map);
+      currentMarkers.push(marker);
+
+      // Update polyline
+      updatePolyline();
+      document.getElementById('vertexCount').textContent = currentVertices.length;
+    }
+
+    function updatePolyline() {
+      if (currentPolyline) map.removeLayer(currentPolyline);
+      if (currentVertices.length > 1) {
+        const latlngs = currentVertices.map(c => [c[1], c[0]]);
+        currentPolyline = L.polyline(latlngs, {
+          color: '#e94560', weight: 2, dashArray: '5,5',
+        }).addTo(map);
+      }
+    }
+
+    function undoVertex() {
+      if (currentVertices.length === 0) return;
+      currentVertices.pop();
+      const m = currentMarkers.pop();
+      if (m) map.removeLayer(m);
+      updatePolyline();
+      document.getElementById('vertexCount').textContent = currentVertices.length;
+    }
+
+    function clearCurrent() {
+      currentMarkers.forEach(m => map.removeLayer(m));
+      if (currentPolyline) map.removeLayer(currentPolyline);
+      currentVertices = [];
+      currentMarkers = [];
+      currentPolyline = null;
+      document.getElementById('vertexCount').textContent = '0';
+    }
+
+    function completePolygon() {
+      if (currentVertices.length < 3) {
+        alert('Minimal 3 vertex untuk membuat polygon!');
+        return;
+      }
+
+      const rtNum = document.getElementById('rtNumber').value.padStart(2, '0');
+
+      // Close the polygon
+      const coords = [...currentVertices, currentVertices[0]];
+
+      // Remove existing if re-digitizing
+      if (completedLayers[rtNum]) {
+        map.removeLayer(completedLayers[rtNum]);
+      }
+
+      // Draw completed polygon
+      const latlngs = currentVertices.map(c => [c[1], c[0]]);
+      const polygon = L.polygon(latlngs, {
+        color: '#ffffff', weight: 2, fillColor: '#18aa3b',
+        fillOpacity: 0.4,
+      }).addTo(map);
+      polygon.bindTooltip(`RT ${rtNum}`, { permanent: true, direction: 'center' });
+
+      // Save
+      completedRTs[rtNum] = {
+        type: "Feature",
+        properties: {
+          rt_number: rtNum,
+          stunting_count: 0,
+          kelurahan: "Gunung Sari Ulu"
+        },
+        geometry: {
+          type: "Polygon",
+          coordinates: [coords]
+        }
+      };
+      completedLayers[rtNum] = polygon;
+
+      // Clear current
+      clearCurrent();
+      updateCompletedList();
+
+      // Auto-next RT
+      nextRT();
+    }
+
+    function prevRT() {
+      const input = document.getElementById('rtNumber');
+      let val = parseInt(input.value) - 1;
+      if (val < 1) val = 41;
+      input.value = val;
+
+      // Load existing polygon if any
+      const rtNum = String(val).padStart(2, '0');
+      if (completedRTs[rtNum]) {
+        const coords = completedRTs[rtNum].geometry.coordinates[0];
+        currentVertices = coords.slice(0, -1).map(c => [c[0], c[1]]);
+        currentMarkers.forEach(m => map.removeLayer(m));
+        currentMarkers = currentVertices.map(c =>
+          L.circleMarker([c[1], c[0]], {
+            radius: 4, fillColor: '#e94560', color: '#fff',
+            weight: 1, fillOpacity: 1,
+          }).addTo(map)
+        );
+        updatePolyline();
+        document.getElementById('vertexCount').textContent = currentVertices.length;
+      }
+    }
+
+    function nextRT() {
+      const input = document.getElementById('rtNumber');
+      let val = parseInt(input.value) + 1;
+      if (val > 41) val = 1;
+      input.value = val;
+    }
+
+    function updateCompletedList() {
+      const list = document.getElementById('completedList');
+      const rts = Object.keys(completedRTs).sort((a, b) => parseInt(a) - parseInt(b));
+      document.getElementById('completedCount').textContent = rts.length;
+
+      if (rts.length === 0) {
+        list.innerHTML = '<span class="info">Belum ada RT yang didigitasi.</span>';
+        return;
+      }
+
+      list.innerHTML = rts.map(rt =>
+        `<div class="completed-item">
+          <span>RT ${rt} (${completedRTs[rt].geometry.coordinates[0].length - 1} vertex)</span>
+          <button onclick="editRT('${rt}')" style="padding:2px 8px; font-size:0.75rem;">Edit</button>
+        </div>`
+      ).join('');
+    }
+
+    function editRT(rtNum) {
+      // Load the polygon for editing
+      if (!completedRTs[rtNum]) return;
+      clearCurrent();
+      document.getElementById('rtNumber').value = parseInt(rtNum);
+
+      const coords = completedRTs[rtNum].geometry.coordinates[0];
+      currentVertices = coords.slice(0, -1);
+      currentMarkers.forEach(m => map.removeLayer(m));
+      currentMarkers = currentVertices.map(c =>
+        L.circleMarker([c[1], c[0]], {
+          radius: 4, fillColor: '#e94560', color: '#fff',
+          weight: 1, fillOpacity: 1,
+        }).addTo(map)
+      );
+      updatePolyline();
+      document.getElementById('vertexCount').textContent = currentVertices.length;
+
+      // Remove the completed polygon layer so we can redraw
+      if (completedLayers[rtNum]) {
+        map.removeLayer(completedLayers[rtNum]);
+        delete completedLayers[rtNum];
+        delete completedRTs[rtNum];
+        updateCompletedList();
+      }
+    }
+
+    function setOverlayOpacity(val) {
+      overlay.setOpacity(val / 100);
+      document.getElementById('opacityVal').textContent = val + '%';
+    }
+
+    function exportGeoJson() {
+      const rts = Object.keys(completedRTs).sort((a, b) => parseInt(a) - parseInt(b));
+      const geojson = {
+        type: "FeatureCollection",
+        features: rts.map(rt => completedRTs[rt])
+      };
+      const json = JSON.stringify(geojson, null, 2);
+      document.getElementById('export-area').value = json;
+    }
+
+    function copyToClipboard() {
+      const area = document.getElementById('export-area');
+      if (!area.value) exportGeoJson();
+      area.select();
+      navigator.clipboard.writeText(area.value).then(() => {
+        alert('GeoJSON copied to clipboard!');
+      });
+    }
+
+    function importFromFile() {
+      document.getElementById('importFile').click();
+    }
+
+    function handleImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const geojson = JSON.parse(e.target.result);
+          geojson.features.forEach(f => {
+            const rtNum = f.properties.rt_number;
+            completedRTs[rtNum] = f;
+
+            // Draw on map
+            if (completedLayers[rtNum]) map.removeLayer(completedLayers[rtNum]);
+            const coords = f.geometry.coordinates[0];
+            const latlngs = coords.slice(0, -1).map(c => [c[1], c[0]]);
+            const polygon = L.polygon(latlngs, {
+              color: '#ffffff', weight: 2, fillColor: '#18aa3b',
+              fillOpacity: 0.4,
+            }).addTo(map);
+            polygon.bindTooltip(`RT ${rtNum}`, { permanent: true, direction: 'center' });
+            completedLayers[rtNum] = polygon;
+          });
+          updateCompletedList();
+          alert(`Imported ${geojson.features.length} RTs`);
+        } catch (err) {
+          alert('Error parsing file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+      event.target.value = '';
+    }
+
+    // Fit map to image bounds on load
+    map.fitBounds(imageBounds, { padding: [20, 20] });
+  </script>
+</body>
+</html>

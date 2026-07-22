@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   submitStuntingData,
   getRTNumbers,
   getCurrentPeriod,
 } from "../lib/dataService";
 
-const rtNumbers = getRTNumbers();
 const currentPeriod = getCurrentPeriod();
 
 export default function InputPage() {
+  const [rtNumbers, setRTNumbers] = useState([]);
   const [formData, setFormData] = useState({
     rtNumber: "",
     stuntingCount: "",
@@ -18,6 +18,10 @@ export default function InputPage() {
 
   const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: '' }
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    getRTNumbers().then(setRTNumbers);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
