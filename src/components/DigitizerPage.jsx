@@ -10,9 +10,22 @@ const imageBounds = [
 
 function FitMapBounds() {
   const map = useMap();
+
   useEffect(() => {
-    map.fitBounds(imageBounds, { padding: [20, 20] });
+    const fitMap = () => {
+      map.invalidateSize();
+      map.fitBounds(imageBounds, { padding: [0, 0], animate: false });
+    };
+
+    const frame = requestAnimationFrame(fitMap);
+    window.addEventListener("resize", fitMap);
+
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", fitMap);
+    };
   }, [map]);
+
   return null;
 }
 
@@ -119,7 +132,7 @@ export default function DigitizerPage() {
   }, [completePolygon, undoVertex]);
 
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div style={{ display: "flex", flex: 1, width: "100%", overflow: "hidden" }}>
       {/* Panel */}
       <div
         style={{
@@ -242,7 +255,7 @@ export default function DigitizerPage() {
       <MapContainer
         center={[-1.2569, 116.8468]}
         zoom={17}
-        style={{ flex: 1, zIndex: 1 }}
+        style={{ flex: 1, minWidth: 0, minHeight: 0, zIndex: 1 }}
         zoomControl={true}
       >
         <ImageOverlay url={mapReference} bounds={imageBounds} opacity={overlayOpacity} zIndex={0} />

@@ -40,49 +40,97 @@ function EyeIcon({ off }) {
   );
 }
 
+function LeafIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+      <path
+        d="M4 16c-.6-6.5 3.4-11 12-11 .6 6.9-3.3 11-12 11Z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+      <path d="M4.5 15.5 13 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 // Kurva "pertumbuhan" -- pita hijau/kuning/merah proporsional dengan
 // sebaran status RT sungguhan (kurang lebih 29 hijau : 11 kuning : 1 merah
 // dari 41 RT), disatukan garis naik ala grafik KMS/pemantauan balita.
+// viewBox dibuat portrait supaya mengisi panel penuh tinggi layar,
+// bukan sekadar ilustrasi kecil di dalam kartu.
 function GrowthSignature() {
   return (
-    <svg className="growth-signature" viewBox="0 0 380 230" fill="none" aria-hidden="true">
+    <svg
+      className="growth-signature"
+      viewBox="0 0 460 820"
+      preserveAspectRatio="none"
+      fill="none"
+      aria-hidden="true"
+    >
       <defs>
-        <linearGradient id="bandGradient" x1="0" y1="230" x2="0" y2="0" gradientUnits="userSpaceOnUse">
+        <linearGradient id="bandGradient" x1="0" y1="820" x2="0" y2="0" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#e4574b" stopOpacity="0.55" />
           <stop offset="0.16" stopColor="#f2a93c" stopOpacity="0.5" />
           <stop offset="0.5" stopColor="#2f9e6d" stopOpacity="0.42" />
           <stop offset="1" stopColor="#2f9e6d" stopOpacity="0.18" />
         </linearGradient>
-        <linearGradient id="curveStroke" x1="0" y1="230" x2="380" y2="0" gradientUnits="userSpaceOnUse">
+        <linearGradient id="curveStroke" x1="0" y1="820" x2="460" y2="0" gradientUnits="userSpaceOnUse">
           <stop offset="0" stopColor="#ffffff" stopOpacity="0.55" />
           <stop offset="1" stopColor="#ffffff" stopOpacity="0.95" />
         </linearGradient>
       </defs>
 
-      <rect x="0" y="0" width="380" height="230" rx="18" fill="url(#bandGradient)" />
+      <rect x="0" y="0" width="460" height="820" fill="url(#bandGradient)" />
 
       <path
         className="growth-curve-line"
-        d="M8 198 C 60 200, 90 176, 118 158 C 158 132, 150 108, 196 90 C 240 73, 250 96, 292 62 C 320 40, 330 46, 372 20"
+        d="M30 760 C 90 770, 120 620, 140 560 C 165 480, 150 400, 230 320 C 290 260, 270 200, 350 130 C 385 100, 395 85, 410 60"
         stroke="url(#curveStroke)"
-        strokeWidth="3.5"
+        strokeWidth="4"
         strokeLinecap="round"
         fill="none"
       />
 
       {[
-        [8, 198],
-        [118, 158],
-        [196, 90],
-        [292, 62],
+        [30, 760],
+        [140, 560],
+        [230, 320],
+        [410, 60],
       ].map(([cx, cy]) => (
-        <circle key={cx} cx={cx} cy={cy} r="4" fill="#ffffff" fillOpacity="0.85" />
+        <circle key={cx} cx={cx} cy={cy} r="6" fill="#ffffff" fillOpacity="0.85" />
       ))}
 
-      <circle className="growth-curve-dot" cx="372" cy="20" r="7" fill="#ffffff" />
-      <circle className="growth-curve-pulse" cx="372" cy="20" r="7" fill="#ffffff" />
+      <circle className="growth-curve-dot" cx="410" cy="60" r="9" fill="#ffffff" />
+      <circle className="growth-curve-pulse" cx="410" cy="60" r="9" fill="#ffffff" />
     </svg>
   );
+}
+
+// Terjemahkan kode error jadi pesan yang jelas dan spesifik.
+// email_not_found / wrong_password dibedakan lewat RPC
+// check_email_exists di Supabase (lihat AuthProvider.jsx +
+// check_email_exists.sql). Ini sedikit membuka celah enumerasi akun --
+// diterima di sini karena akun dibuatkan admin Puskesmas, bukan
+// pendaftaran publik. invalid_credentials dipakai sebagai fallback aman
+// kalau RPC itu belum terpasang atau gagal dipanggil.
+function mapAuthError(errorCode) {
+  switch (errorCode) {
+    case "email_not_found":
+      return "Email tidak ditemukan.";
+    case "wrong_password":
+      return "Kata sandi salah. Coba periksa lagi.";
+    case "invalid_credentials":
+      return "Email atau kata sandi tidak cocok. Coba periksa lagi.";
+    case "email_not_confirmed":
+      return "Email belum dikonfirmasi. Cek kotak masuk email Anda untuk tautan verifikasi.";
+    case "too_many_requests":
+      return "Terlalu banyak percobaan. Coba lagi dalam beberapa menit.";
+    case "network_error":
+      return "Gagal terhubung ke server. Periksa koneksi internet Anda.";
+    default:
+      return "Terjadi kesalahan saat masuk. Coba lagi sebentar lagi.";
+  }
 }
 
 export default function Login() {
@@ -116,7 +164,7 @@ export default function Login() {
     setIsSubmitting(false);
 
     if (!result.success) {
-      setError(result.error || "Email atau kata sandi belum cocok. Coba periksa lagi.");
+      setError(mapAuthError(result.errorCode));
       return;
     }
 
@@ -130,6 +178,13 @@ export default function Login() {
         {/* Panel identitas */}
         <div className="login-visual">
           <GrowthSignature />
+
+          <div className="login-brand">
+            <span className="login-brand-mark">
+              <LeafIcon />
+            </span>
+            <span className="login-brand-name">Posyandu Digital</span>
+          </div>
 
           <div className="login-visual-content">
             <span className="login-eyebrow">Untuk Kader Posyandu &amp; Puskesmas</span>

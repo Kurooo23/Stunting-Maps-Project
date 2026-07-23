@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { MapContainer, ImageOverlay, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { getStyle } from "../lib/colors";
@@ -13,13 +13,16 @@ const imageBounds = [
 // Component to fit map bounds to GeoJSON data
 function FitBounds({ geoJsonData }) {
   const map = useMap();
-  const fitted = useRef(false);
 
   useEffect(() => {
-    if (!fitted.current) {
-      map.fitBounds(imageBounds, { padding: [20, 20] });
-      fitted.current = true;
-    }
+    const fit = () => {
+      map.invalidateSize();
+      map.fitBounds(imageBounds, { padding: [0, 0] });
+    };
+
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
   }, [geoJsonData, map]);
 
   return null;
@@ -40,6 +43,8 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
       doubleClickZoom={false}
       touchZoom={false}
       dragging={false}
+      zoomSnap={0}
+      zoomDelta={0.25}
     >
       {/* Reference map image for Gunung Sari Ulu */}
       <ImageOverlay
