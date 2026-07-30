@@ -12,6 +12,13 @@ function getSupabase() {
   return supabasePromise;
 }
 
+function scheduleIdle(callback) {
+  if (typeof window.requestIdleCallback === "function") {
+    return window.requestIdleCallback(callback, { timeout: 2000 });
+  }
+  return setTimeout(callback, 200);
+}
+
 async function checkEmailExists(supabase, email) {
   const { data, error } = await supabase.rpc("check_email_exists", {
     p_email: email,
@@ -32,27 +39,35 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let mounted = true;
+    let idleHandle;
 
-    getSupabase().then((supabase) => {
-      if (!mounted) return;
-
-      supabase.auth.getSession().then(({ data: { session } }) => {
+    idleHandle = scheduleIdle(() => {
+      getSupabase().then((supabase) => {
         if (!mounted) return;
-        setUser(session?.user ?? null);
-        setLoading(false);
-      });
 
-      const { data: listener } = supabase.auth.onAuthStateChange(
-        (_event, session) => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!mounted) return;
           setUser(session?.user ?? null);
-        }
-      );
-      unsubscribeRef.current = () => listener.subscription.unsubscribe();
+          setLoading(false);
+        });
+
+        const { data: listener } = supabase.auth.onAuthStateChange(
+          (_event, session) => {
+            setUser(session?.user ?? null);
+          }
+        );
+        unsubscribeRef.current = () => listener.subscription.unsubscribe();
+      });
     });
 
     return () => {
       mounted = false;
       unsubscribeRef.current?.();
+      if (typeof window.cancelIdleCallback === "function" && idleHandle !== undefined) {
+        window.cancelIdleCallback(idleHandle);
+      } else {
+        clearTimeout(idleHandle);
+      }
     };
   }, []);
 
