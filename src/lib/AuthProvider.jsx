@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import { AuthContext } from "./AuthContext";
+import { useIdleLogout } from "./useIdleLogout";
 
 // ============================================================
 // AuthProvider
@@ -8,6 +9,9 @@ import { AuthContext } from "./AuthContext";
 // Menyediakan status login (user, loading) beserta fungsi
 // signIn / signOut ke seluruh aplikasi lewat Supabase Auth.
 // ============================================================
+
+// Auto logout kalau tidak ada aktivitas sama sekali selama 30 menit.
+const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 // Supabase sengaja mengembalikan pesan "Invalid login credentials" yang
 // SAMA baik untuk email yang belum terdaftar maupun password yang salah,
@@ -108,6 +112,16 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
     setUser(null);
   };
+
+  // Kalau timer idle habis, cukup panggil signOut Supabase -- listener
+  // onAuthStateChange di atas yang akan meng-update state `user` jadi
+  // null (jadi ProtectedRoute otomatis mengarahkan balik ke halaman
+  // login).
+  const handleIdle = useCallback(() => {
+    supabase.auth.signOut();
+  }, []);
+
+  useIdleLogout(Boolean(user), handleIdle, IDLE_TIMEOUT_MS);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
