@@ -71,7 +71,7 @@ export async function fetchRTData(kelurahan, period) {
       .select("rt_number, kelurahan, geometry")
       .order("rt_number");
     let casesQuery = supabase
-      .from("stunting_by_period")
+      .from("stunting_data")
       .select("rt_number, kelurahan, stunting_count, period, updated_at")
       .eq("period", activePeriod)
       .order("rt_number");

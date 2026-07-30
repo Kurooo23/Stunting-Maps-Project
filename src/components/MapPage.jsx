@@ -34,6 +34,7 @@ export default function MapPage() {
     link.rel = "preload";
     link.as = "image";
     link.href = "/peta-map-bg.webp";
+    link.fetchPriority = "high";
     document.head.appendChild(link);
     return () => link.remove();
   }, []);
