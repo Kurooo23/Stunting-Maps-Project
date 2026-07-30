@@ -4,10 +4,13 @@ import {
   getRTNumbers,
   getCurrentPeriod,
 } from "../lib/dataService";
+import { useAuth } from "../lib/useAuth";
 
 const currentPeriod = getCurrentPeriod();
 
 export default function InputPage() {
+  const { user } = useAuth();
+  const kelurahan = user?.user_metadata?.kelurahan;
   const [rtNumbers, setRTNumbers] = useState([]);
   const [formData, setFormData] = useState({
     rtNumber: "",
@@ -20,8 +23,8 @@ export default function InputPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    getRTNumbers().then(setRTNumbers);
-  }, []);
+    getRTNumbers(kelurahan).then(setRTNumbers);
+  }, [kelurahan]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -48,6 +51,7 @@ export default function InputPage() {
       stuntingCount: Number(formData.stuntingCount),
       period: formData.period,
       notes: formData.notes,
+      kelurahan,
     });
 
     if (result.success) {

@@ -1,19 +1,42 @@
 import { useState, useEffect, useMemo } from "react";
 import MapComponent from "./MapComponent";
-import { fetchRTData } from "../lib/dataService";
+import { fetchRTData, getCurrentPeriod } from "../lib/dataService";
+import { useAuth } from "../lib/useAuth";
+
+// Label bulan dalam Bahasa Indonesia untuk ditampilkan di sidebar
+const NAMA_BULAN = [
+  "Januari", "Februari", "Maret", "April", "Mei", "Juni",
+  "Juli", "Agustus", "September", "Oktober", "November", "Desember",
+];
+
+function formatPeriodLabel(period) {
+  if (!period) return "";
+  const [year, month] = period.split("-");
+  const namaBulan = NAMA_BULAN[Number(month) - 1] || month;
+  return `${namaBulan} ${year}`;
+}
 
 export default function MapPage() {
+  const { user } = useAuth();
+  const kelurahan = user?.user_metadata?.kelurahan;
   const [geoJsonData, setGeoJsonData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState(getCurrentPeriod());
 
   useEffect(() => {
+    let cancelled = false;
     async function loadData() {
-      const data = await fetchRTData();
+      setLoading(true);
+      const data = await fetchRTData(kelurahan, period);
+      if (cancelled) return;
       setGeoJsonData(data);
       setLoading(false);
     }
     loadData();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [kelurahan, period]);
 
   const stats = useMemo(() => {
     if (!geoJsonData?.features) return null;
@@ -31,7 +54,7 @@ export default function MapPage() {
     return { totalRT, totalStunting, rtHijau, rtKuning, rtMerah };
   }, [geoJsonData]);
 
-  if (loading || !stats) {
+  if (!geoJsonData || !stats) {
     return (
       <div className="map-page">
         <div className="loading-spinner">
@@ -48,6 +71,18 @@ export default function MapPage() {
       <aside className="sidebar">
         <div className="sidebar-section">
           <h2>Ringkasan</h2>
+          <div className="period-picker">
+            <label htmlFor="periode-peta">Periode data</label>
+            <input
+              type="month"
+              id="periode-peta"
+              value={period}
+              onChange={(e) => setPeriod(e.target.value)}
+            />
+            <span className="period-picker-label">
+              {loading ? "Memuat..." : formatPeriodLabel(period)}
+            </span>
+          </div>
           <div className="stat-grid">
             <div className="stat-card">
               <span className="stat-number">{stats.totalRT}</span>
@@ -83,6 +118,12 @@ export default function MapPage() {
 
         <div className="sidebar-section">
           <h2>Daftar RT</h2>
+          {geoJsonData.features.length === 0 && (
+            <p style={{ fontSize: "0.85rem", color: "#888" }}>
+              Belum ada data batas RT untuk wilayah akun ini. Hubungi admin untuk menambahkan data
+              lewat halaman Digitizer.
+            </p>
+          )}
           <div className="rt-list">
             {geoJsonData.features
               .sort(

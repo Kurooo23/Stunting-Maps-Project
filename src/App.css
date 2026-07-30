@@ -230,6 +230,44 @@
   border-bottom: 2px solid #e0e0e0;
 }
 
+/* --- Period Picker (bulan & tahun di Ringkasan) --- */
+.period-picker {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  margin-bottom: 14px;
+}
+
+.period-picker label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #444;
+}
+
+.period-picker input[type="month"] {
+  padding: 8px 10px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  color: #333;
+  background: white;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.period-picker input[type="month"]:focus {
+  border-color: #1a237e;
+  box-shadow: 0 0 0 3px rgba(26, 35, 126, 0.1);
+}
+
+.period-picker-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1a237e;
+}
+
 /* --- Stats Grid --- */
 .stat-grid {
   display: grid;

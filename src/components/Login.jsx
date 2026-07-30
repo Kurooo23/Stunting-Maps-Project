@@ -197,9 +197,9 @@ export default function Login() {
             </p>
 
             <div className="login-chips">
-              <span className="login-chip">41 RT dipantau</span>
-              <span className="login-chip">Kel. Gunung Sari Ulu</span>
-              <span className="login-chip">Kec. Balikpapan Tengah</span>
+              <span className="login-chip">Peta per RT</span>
+              <span className="login-chip">Sesuai wilayah kerja akun Anda</span>
+              <span className="login-chip">Balikpapan</span>
             </div>
           </div>
         </div>

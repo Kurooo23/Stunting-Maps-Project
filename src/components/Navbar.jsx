@@ -32,6 +32,9 @@ export default function Navbar() {
   const { user, signOut } = useAuth();
   const metadata = user?.user_metadata || {};
   const displayName = metadata.full_name || metadata.name || user?.email?.split("@")[0] || "Kader";
+  const kelurahan = metadata.kelurahan || "Gunung Sari Ulu";
+  const kota = metadata.kota || "Balikpapan";
+  const role = metadata.role || "Kader Puskesmas";
   const initials = displayName
     .split(/[\s._-]+/)
     .filter(Boolean)
@@ -50,7 +53,7 @@ export default function Navbar() {
         <div className="header-left">
           <p className="brand-kicker">Posyandu digital</p>
           <h1>Peta Stunting</h1>
-          <span className="header-subtitle">Gunung Sari Ulu &middot; Balikpapan</span>
+          <span className="header-subtitle">{kelurahan} &middot; {kota}</span>
         </div>
       </div>
       <nav className="header-nav">
@@ -67,7 +70,7 @@ export default function Navbar() {
         <div className="account-avatar" aria-hidden="true">{initials || "K"}</div>
         <div className="account-copy">
           <strong>{displayName}</strong>
-          <span>Kader Puskesmas</span>
+          <span>{role}</span>
         </div>
         <button type="button" className="nav-logout" onClick={signOut} aria-label="Keluar dari akun" title="Keluar">
           <LogOutIcon />
