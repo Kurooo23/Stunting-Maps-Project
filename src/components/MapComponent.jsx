@@ -6,7 +6,10 @@ import Legend from "./Legend";
 // Latar peta yang sudah dikompres & di-resize khusus untuk tampilan /peta
 // (bukan yang dipakai DigitizerPage -- itu tetap pakai gambar resolusi asli
 // karena butuh presisi tinggi untuk menggambar batas RT).
-const mapReference = "/peta-map-bg.webp";
+const mapReference =
+  typeof window !== "undefined" && window.innerWidth < 768
+      ? "/peta-map-bg-mobile.webp"
+      : "/peta-map-bg.webp";
 
 const imageBounds = [
   [-1.267, 116.835],

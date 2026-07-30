@@ -3,7 +3,6 @@ import MapComponent from "./MapComponent";
 import { fetchRTData, getCurrentPeriod } from "../lib/dataService";
 import { useAuth } from "../lib/useAuth";
 
-// Label bulan dalam Bahasa Indonesia untuk ditampilkan di sidebar
 const NAMA_BULAN = [
   "Januari", "Februari", "Maret", "April", "Mei", "Juni",
   "Juli", "Agustus", "September", "Oktober", "November", "Desember",
@@ -23,17 +22,12 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(getCurrentPeriod());
 
-  // peta-map-bg.webp adalah elemen LCP khusus untuk rute ini, tapi baru
-  // dirender (lewat MapComponent) setelah data RT selesai di-fetch. Supaya
-  // gak nunggu fetch itu kelar dulu baru mulai unduh gambarnya, kita pasang
-  // preload begitu MapPage mount -- jalan paralel dengan fetch data.
-  // (Preload ini gak lagi dipasang global di index.html supaya halaman
-  // lain, mis. Login, gak ikut menanggung 472 KB yang gak dia butuhkan.)
   useEffect(() => {
+    const isMobile = window.innerWidth < 768;
     const link = document.createElement("link");
     link.rel = "preload";
     link.as = "image";
-    link.href = "/peta-map-bg.webp";
+    link.href = isMobile ? "/peta-map-bg-mobile.webp" : "/peta-map-bg.webp";
     link.fetchPriority = "high";
     document.head.appendChild(link);
     return () => link.remove();
@@ -70,27 +64,10 @@ export default function MapPage() {
     return { totalRT, totalStunting, rtHijau, rtKuning, rtMerah };
   }, [geoJsonData]);
 
-  if (!geoJsonData || !stats) {
-    return (
-      <div className="map-page">
-        <aside className="sidebar">
-          <div className="sidebar-section">
-            <h2>Ringkasan</h2>
-          </div>
-        </aside>
-        <div className="map-wrapper">
-          <div className="loading-spinner">
-            <div className="spinner"></div>
-            <p>Memuat data peta...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const features = geoJsonData?.features ?? [];
 
   return (
     <div className="map-page">
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-section">
           <h2>Ringkasan</h2>
@@ -108,11 +85,11 @@ export default function MapPage() {
           </div>
           <div className="stat-grid">
             <div className="stat-card">
-              <span className="stat-number">{stats.totalRT}</span>
+              <span className="stat-number">{stats ? stats.totalRT : "–"}</span>
               <span className="stat-label">Total RT</span>
             </div>
             <div className="stat-card">
-              <span className="stat-number">{stats.totalStunting}</span>
+              <span className="stat-number">{stats ? stats.totalStunting : "–"}</span>
               <span className="stat-label">Total Kasus</span>
             </div>
           </div>
@@ -124,31 +101,32 @@ export default function MapPage() {
             <div className="status-item">
               <span className="status-dot status-green"></span>
               <span className="status-text">0 Kasus (Hijau)</span>
-              <span className="status-count">{stats.rtHijau} RT</span>
+              <span className="status-count">{stats ? stats.rtHijau : "–"} RT</span>
             </div>
             <div className="status-item">
               <span className="status-dot status-yellow"></span>
               <span className="status-text">1 - 2 Kasus (Kuning)</span>
-              <span className="status-count">{stats.rtKuning} RT</span>
+              <span className="status-count">{stats ? stats.rtKuning : "–"} RT</span>
             </div>
             <div className="status-item">
               <span className="status-dot status-red"></span>
               <span className="status-text">3+ Kasus (Merah)</span>
-              <span className="status-count">{stats.rtMerah} RT</span>
+              <span className="status-count">{stats ? stats.rtMerah : "–"} RT</span>
             </div>
           </div>
         </div>
 
         <div className="sidebar-section">
           <h2>Daftar RT</h2>
-          {geoJsonData.features.length === 0 && (
-            <p style={{ fontSize: "0.85rem", color: "#888" }}>
+          {!loading && features.length === 0 && (
+            <p style={{ fontSize: "0.85rem", color: "#666666" }}>
               Belum ada data batas RT untuk wilayah akun ini. Hubungi admin untuk menambahkan data
               lewat halaman Digitizer.
             </p>
           )}
           <div className="rt-list">
-            {geoJsonData.features
+            {features
+              .slice()
               .sort(
                 (a, b) =>
                   Number(a.properties.rt_number) -
@@ -173,9 +151,8 @@ export default function MapPage() {
         </div>
       </aside>
 
-      {/* Map */}
       <div className="map-wrapper">
-        <MapComponent geoJsonData={geoJsonData} />
+        <MapComponent geoJsonData={geoJsonData ?? { type: "FeatureCollection", features: [] }} />
       </div>
     </div>
   );
