@@ -1,15 +1,20 @@
 <!doctype html>
-<html lang="en">
+<html lang="id">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Posyandu Digital -- aplikasi pemantauan status stunting per RT untuk kader Posyandu dan Puskesmas di Balikpapan."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Latar peta /peta adalah elemen LCP -- preload dengan prioritas
-         tinggi supaya browser mulai mengunduhnya sedini mungkin, gak usah
-         nunggu JS Leaflet selesai jalan dulu baru mulai fetch. -->
-    <link rel="preload" as="image" href="/peta-map-bg.webp" />
+    <!-- Preload gambar latar peta DIHAPUS dari sini: gambar itu (472 KB)
+         cuma dipakai di rute /peta, tapi kalau di-preload secara global
+         di index.html dia ikut kebawa-download di halaman lain (mis.
+         Login) yang sama sekali gak butuh. Preload-nya sekarang dipasang
+         secara dinamis di MapPage, cuma pas rute /peta yang dibuka. -->
     <link
       rel="preload"
       as="style"

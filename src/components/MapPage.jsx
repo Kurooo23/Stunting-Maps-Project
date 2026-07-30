@@ -23,6 +23,21 @@ export default function MapPage() {
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(getCurrentPeriod());
 
+  // peta-map-bg.webp adalah elemen LCP khusus untuk rute ini, tapi baru
+  // dirender (lewat MapComponent) setelah data RT selesai di-fetch. Supaya
+  // gak nunggu fetch itu kelar dulu baru mulai unduh gambarnya, kita pasang
+  // preload begitu MapPage mount -- jalan paralel dengan fetch data.
+  // (Preload ini gak lagi dipasang global di index.html supaya halaman
+  // lain, mis. Login, gak ikut menanggung 472 KB yang gak dia butuhkan.)
+  useEffect(() => {
+    const link = document.createElement("link");
+    link.rel = "preload";
+    link.as = "image";
+    link.href = "/peta-map-bg.webp";
+    document.head.appendChild(link);
+    return () => link.remove();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     async function loadData() {
@@ -62,12 +77,12 @@ export default function MapPage() {
             <h2>Ringkasan</h2>
           </div>
         </aside>
-        <main className="map-wrapper">
+        <div className="map-wrapper">
           <div className="loading-spinner">
             <div className="spinner"></div>
             <p>Memuat data peta...</p>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -158,9 +173,9 @@ export default function MapPage() {
       </aside>
 
       {/* Map */}
-      <main className="map-wrapper">
+      <div className="map-wrapper">
         <MapComponent geoJsonData={geoJsonData} />
-      </main>
+      </div>
     </div>
   );
 }
