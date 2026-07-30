@@ -7,11 +7,6 @@ import Navbar from "./components/Navbar";
 import Login from "./components/Login";
 import "./App.css";
 
-// Rute-rute ini menyeret dependensi berat (Leaflet, react-leaflet,
-// Supabase, dst) yang gak dibutuhkan halaman Login. Di-lazy-load supaya
-// bundle awal (yang diunduh siapa pun yang buka "/") tetap kecil --
-// Leaflet dkk baru diunduh saat kader benar-benar membuka /peta, /input,
-// atau /digitize.
 const MapPage = lazy(() => import("./components/MapPage"));
 const InputPage = lazy(() => import("./components/InputPage"));
 const DigitizerPage = lazy(() => import("./components/DigitizerPage"));

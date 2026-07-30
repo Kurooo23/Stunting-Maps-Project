@@ -1,39 +1,24 @@
-import { useCallback, useEffect, useState } from "react";
-import { supabase } from "./supabase";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
 import { useIdleLogout } from "./useIdleLogout";
 
-// ============================================================
-// AuthProvider
-// ============================================================
-// Menyediakan status login (user, loading) beserta fungsi
-// signIn / signOut ke seluruh aplikasi lewat Supabase Auth.
-// ============================================================
-
-// Auto logout kalau tidak ada aktivitas sama sekali selama 30 menit.
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
-// Supabase sengaja mengembalikan pesan "Invalid login credentials" yang
-// SAMA baik untuk email yang belum terdaftar maupun password yang salah,
-// supaya orang luar tidak bisa menebak-nebak email mana saja yang punya
-// akun (mencegah user enumeration). Untuk membedakannya, kita panggil
-// fungsi Postgres `check_email_exists` (lihat check_email_exists.sql)
-// lewat RPC -- fungsi itu berjalan sebagai SECURITY DEFINER supaya bisa
-// membaca auth.users tanpa membuka tabel itu langsung ke klien.
-//
-// Ini SEDIKIT membuka celah enumerasi (orang bisa tahu suatu email
-// terdaftar atau tidak, walau tanpa tahu passwordnya). Untuk aplikasi
-// ini -- akun kader dibuatkan admin Puskesmas, bukan pendaftaran publik
-// -- risikonya kecil dan diterima demi pesan error yang lebih jelas.
-async function checkEmailExists(email) {
+let supabasePromise;
+function getSupabase() {
+  if (!supabasePromise) {
+    supabasePromise = import("./supabase").then((m) => m.supabase);
+  }
+  return supabasePromise;
+}
+
+async function checkEmailExists(supabase, email) {
   const { data, error } = await supabase.rpc("check_email_exists", {
     p_email: email,
   });
 
   if (error) {
     console.error("[Auth] Gagal memeriksa keberadaan email:", error.message);
-    // Kalau RPC belum terpasang atau gagal, jangan tebak -- tampilkan
-    // pesan gabungan yang aman lewat errorCode "invalid_credentials".
     return null;
   }
 
@@ -43,29 +28,36 @@ async function checkEmailExists(email) {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const unsubscribeRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSupabase().then((supabase) => {
       if (!mounted) return;
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!mounted) return;
         setUser(session?.user ?? null);
-      }
-    );
+        setLoading(false);
+      });
+
+      const { data: listener } = supabase.auth.onAuthStateChange(
+        (_event, session) => {
+          setUser(session?.user ?? null);
+        }
+      );
+      unsubscribeRef.current = () => listener.subscription.unsubscribe();
+    });
 
     return () => {
       mounted = false;
-      listener.subscription.unsubscribe();
+      unsubscribeRef.current?.();
     };
   }, []);
 
   const signIn = async (email, password) => {
+    const supabase = await getSupabase();
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -79,10 +71,9 @@ export function AuthProvider({ children }) {
     const message = (error.message || "").toLowerCase();
 
     if (message.includes("invalid login credentials")) {
-      const emailExists = await checkEmailExists(email);
+      const emailExists = await checkEmailExists(supabase, email);
 
       if (emailExists === null) {
-        // RPC gagal/belum ada -- fallback aman, bukan menebak.
         return { success: false, errorCode: "invalid_credentials", error: error.message };
       }
 
@@ -109,16 +100,13 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
+    const supabase = await getSupabase();
     await supabase.auth.signOut();
     setUser(null);
   };
 
-  // Kalau timer idle habis, cukup panggil signOut Supabase -- listener
-  // onAuthStateChange di atas yang akan meng-update state `user` jadi
-  // null (jadi ProtectedRoute otomatis mengarahkan balik ke halaman
-  // login).
   const handleIdle = useCallback(() => {
-    supabase.auth.signOut();
+    getSupabase().then((supabase) => supabase.auth.signOut());
   }, []);
 
   useIdleLogout(Boolean(user), handleIdle, IDLE_TIMEOUT_MS);
