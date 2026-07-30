@@ -6,7 +6,7 @@ import Legend from "./Legend";
 // Latar peta yang sudah dikompres & di-resize khusus untuk tampilan /peta
 // (bukan yang dipakai DigitizerPage -- itu tetap pakai gambar resolusi asli
 // karena butuh presisi tinggi untuk menggambar batas RT).
-import mapReference from "../../public/peta-map-bg.webp";
+const mapReference = "/peta-map-bg.webp";
 
 const imageBounds = [
   [-1.267, 116.835],
