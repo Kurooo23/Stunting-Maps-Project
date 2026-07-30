@@ -2,6 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RT Digitizer - Gunung Sari Ulu</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -54,6 +55,9 @@
       border-radius: 10px; padding: 1px 8px; font-size: 0.75rem;
     }
     .section { border-top: 1px solid #333; padding-top: 10px; }
+    .row-wrap { flex-wrap: wrap; }
+    #opacitySlider { flex: 1; }
+    #importFile { display: none; }
   </style>
 </head>
 <body>
@@ -64,14 +68,14 @@
     <div class="section">
       <div class="row">
         <label>RT #:</label>
-        <input type="number" id="rtNumber" min="1" max="41" value="1" />
+        <input type="number" id="rtNumber" min="1" max="41" value="1" title="Nomor RT" />
         <button onclick="prevRT()">◄</button>
         <button onclick="nextRT()">►</button>
       </div>
     </div>
 
     <div class="section">
-      <div class="row" style="flex-wrap: wrap;">
+      <div class="row row-wrap">
         <button class="success" onclick="completePolygon()">Selesai Polygon (Enter)</button>
         <button onclick="undoVertex()">Undo (Ctrl+Z)</button>
         <button onclick="clearCurrent()">Clear</button>
@@ -81,8 +85,8 @@
     <div class="section">
       <div class="row">
         <label>Opacity:</label>
-        <input type="range" id="opacitySlider" min="0" max="100" value="70"
-               oninput="setOverlayOpacity(this.value)" style="flex:1" />
+        <input type="range" id="opacitySlider" min="0" max="100" value="70" title="Opacity peta referensi"
+               oninput="setOverlayOpacity(this.value)" />
         <span id="opacityVal">70%</span>
       </div>
     </div>
@@ -113,7 +117,7 @@
       <div class="row">
         <button onclick="importFromFile()">Load dari File</button>
       </div>
-      <input type="file" id="importFile" accept=".json,.geojson" style="display:none"
+      <input type="file" id="importFile" accept=".json,.geojson" title="Import file GeoJSON"
              onchange="handleImport(event)" />
     </div>
   </div>

@@ -3,7 +3,10 @@ import { MapContainer, ImageOverlay, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { getStyle } from "../lib/colors";
 import Legend from "./Legend";
-import mapReference from "../assets/Peta Batas RT_page-0001.jpg";
+// Latar peta yang sudah dikompres & di-resize khusus untuk tampilan /peta
+// (bukan yang dipakai DigitizerPage -- itu tetap pakai gambar resolusi asli
+// karena butuh presisi tinggi untuk menggambar batas RT).
+import mapReference from "../../public/peta-map-bg.webp";
 
 const imageBounds = [
   [-1.267, 116.835],

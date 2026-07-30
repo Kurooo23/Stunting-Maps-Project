@@ -57,10 +57,17 @@ export default function MapPage() {
   if (!geoJsonData || !stats) {
     return (
       <div className="map-page">
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-          <p>Memuat data peta...</p>
-        </div>
+        <aside className="sidebar">
+          <div className="sidebar-section">
+            <h2>Ringkasan</h2>
+          </div>
+        </aside>
+        <main className="map-wrapper">
+          <div className="loading-spinner">
+            <div className="spinner"></div>
+            <p>Memuat data peta...</p>
+          </div>
+        </main>
       </div>
     );
   }
