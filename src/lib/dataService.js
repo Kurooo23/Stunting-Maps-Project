@@ -66,13 +66,17 @@ export async function fetchRTData(kelurahan, period) {
   }
 
   try {
+    // `stunting_data.kelurahan` sekarang beneran ada (lewat migration yang
+    // backfill dari rt_boundaries via rt_number) -- jadi filter langsung
+    // di sini aman & lebih sederhana daripada fetch boundaries dulu buat
+    // dapetin daftar rt_number-nya.
     let boundariesQuery = supabase
       .from("rt_boundaries")
       .select("rt_number, kelurahan, geometry")
       .order("rt_number");
     let casesQuery = supabase
       .from("stunting_data")
-      .select("rt_number, kelurahan, stunting_count, period, updated_at")
+      .select("rt_number, stunting_count, period, updated_at")
       .eq("period", activePeriod)
       .order("rt_number");
 

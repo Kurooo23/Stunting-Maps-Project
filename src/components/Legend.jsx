@@ -18,19 +18,31 @@ export default function Legend() {
         { label: "3 >", color: getColor(3) },
       ];
 
-      div.innerHTML = `
-        <div class="legend-title">Kasus Stunting</div>
-        ${grades
-          .map(
-            (g) => `
-          <div class="legend-item">
-            <span class="legend-color" style="background:${g.color}"></span>
-            <span class="legend-label">${g.label}</span>
-          </div>
-        `
-          )
-          .join("")}
-      `;
+      // Dibangun lewat DOM API (bukan div.innerHTML = "...") supaya gak
+      // kena error "This document requires 'TrustedHTML' assignment" di
+      // browser/WebView yang menegakkan Trusted Types (ini yang bikin peta
+      // gagal render total di beberapa HP).
+      const title = document.createElement("div");
+      title.className = "legend-title";
+      title.textContent = "Kasus Stunting";
+      div.appendChild(title);
+
+      grades.forEach((g) => {
+        const item = document.createElement("div");
+        item.className = "legend-item";
+
+        const swatch = document.createElement("span");
+        swatch.className = "legend-color";
+        swatch.style.background = g.color;
+
+        const label = document.createElement("span");
+        label.className = "legend-label";
+        label.textContent = g.label;
+
+        item.appendChild(swatch);
+        item.appendChild(label);
+        div.appendChild(item);
+      });
 
       return div;
     };
