@@ -105,8 +105,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
-  const handleIdle = useCallback(() => {
-    getSupabase().then((supabase) => supabase.auth.signOut());
+  const handleIdle = useCallback(async () => {
+    try {
+      const supabase = await getSupabase();
+      await supabase.auth.signOut();
+    } finally {
+      setUser(null);
+    }
   }, []);
 
   useIdleLogout(Boolean(user), handleIdle, IDLE_TIMEOUT_MS);
