@@ -34,6 +34,8 @@ const TABLE_CANDIDATES = {
 
 const tableExistenceCache = new Map();
 
+const SUPABASE_QUERY_CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
 const isMissingTableError = (error) => {
   if (!error) return false;
   const message = String(error.message || error.details || "").toLowerCase();
@@ -47,25 +49,22 @@ const isMissingTableError = (error) => {
 };
 
 async function tableExists(table) {
-  if (tableExistenceCache.has(table)) {
-    return tableExistenceCache.get(table);
+  const cacheKey = `${table}`;
+  const cached = tableExistenceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < SUPABASE_QUERY_CACHE_TTL) {
+    return cached.exists;
   }
 
   const { error } = await supabase.from(table).select("id").limit(1);
-  if (!error) {
-    tableExistenceCache.set(table, true);
-    return true;
+  const exists = !error || !isMissingTableError(error);
+
+  tableExistenceCache.set(cacheKey, { exists, timestamp: Date.now() });
+
+  if (!exists && !isMissingTableError(error)) {
+    console.warn(`[DataService] Table existence check for "${table}" failed:`, error.message || error.details);
   }
 
-  const missing = isMissingTableError(error);
-  if (missing) {
-    tableExistenceCache.set(table, false);
-    return false;
-  }
-
-  console.warn(`[DataService] Table existence check for "${table}" failed:`, error.message || error.details);
-  tableExistenceCache.set(table, true);
-  return true;
+  return exists;
 }
 
 async function resolveTable(candidates = []) {
