@@ -97,7 +97,7 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
 
   try {
     let boundariesQuery = supabase
-      .from("mapping_rt_boundaries")
+      .from("rt_boundaries")
       .select("rt_number, kelurahan, geometry")
       .order("rt_number");
     let casesQuery = supabase
@@ -120,10 +120,10 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
 
     if (!boundaries || boundaries.length === 0) {
       if (kelurahan) {
-        console.warn(`[DataService] mapping_rt_boundaries kosong untuk kelurahan "${kelurahan}".`);
+        console.warn(`[DataService] rt_boundaries kosong untuk kelurahan "${kelurahan}".`);
         return { type: "FeatureCollection", features: [] };
       }
-      console.warn("[DataService] mapping_rt_boundaries kosong di Supabase, pakai data lokal.");
+      console.warn("[DataService] rt_boundaries kosong di Supabase, pakai data lokal.");
       return rtGeoJson;
     }
 
@@ -182,7 +182,7 @@ export async function getRTNumbers(kelurahan) {
     return rtGeoJson.features.map((f) => f.properties.rt_number).sort();
   }
 
-  let query = supabase.from("mapping_rt_boundaries").select("rt_number").order("rt_number");
+  let query = supabase.from("rt_boundaries").select("rt_number").order("rt_number");
   if (kelurahan) query = query.eq("kelurahan", kelurahan);
 
   const { data, error } = await query;
