@@ -26,6 +26,57 @@ const DEFAULT_DISEASES = [
 
 const normalizeRTNumber = (value) => String(value).trim().padStart(2, "0");
 
+const TABLE_CANDIDATES = {
+  boundaries: ["mapping_rt_boundaries", "rt_boundaries"],
+  cases: ["mapping_case_data", "stunting_data"],
+  diseaseDefinitions: ["mapping_disease_definitions"],
+};
+
+const tableExistenceCache = new Map();
+
+const isMissingTableError = (error) => {
+  if (!error) return false;
+  const message = String(error.message || error.details || "").toLowerCase();
+  const code = String(error.code || "");
+  return (
+    message.includes("does not exist") ||
+    message.includes("relation") ||
+    message.includes("could not find") ||
+    code === "42P01"
+  );
+};
+
+async function tableExists(table) {
+  if (tableExistenceCache.has(table)) {
+    return tableExistenceCache.get(table);
+  }
+
+  const { error } = await supabase.from(table).select("id").limit(1);
+  if (!error) {
+    tableExistenceCache.set(table, true);
+    return true;
+  }
+
+  const missing = isMissingTableError(error);
+  if (missing) {
+    tableExistenceCache.set(table, false);
+    return false;
+  }
+
+  console.warn(`[DataService] Table existence check for "${table}" failed:`, error.message || error.details);
+  tableExistenceCache.set(table, true);
+  return true;
+}
+
+async function resolveTable(candidates = []) {
+  for (const table of candidates) {
+    if (await tableExists(table)) {
+      return table;
+    }
+  }
+  return null;
+}
+
 const toGeometry = (geometry) => (
   typeof geometry === "string" ? JSON.parse(geometry) : geometry
 );
@@ -64,9 +115,14 @@ export async function fetchDiseaseDefinitions() {
     return DEFAULT_DISEASES;
   }
 
+  const tableName = await resolveTable(TABLE_CANDIDATES.diseaseDefinitions);
+  if (!tableName) {
+    return DEFAULT_DISEASES;
+  }
+
   try {
     const { data, error } = await supabase
-      .from("mapping_disease_definitions")
+      .from(tableName)
       .select("slug, name, display_name")
       .eq("is_active", true)
       .order("name");
@@ -96,34 +152,72 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
   }
 
   try {
+    const boundariesTable = await resolveTable(TABLE_CANDIDATES.boundaries);
+    if (!boundariesTable) {
+      console.warn("[DataService] Tidak ditemukan tabel batas RT di Supabase.");
+      return rtGeoJson;
+    }
+
+    const caseTable = await resolveTable(TABLE_CANDIDATES.cases);
+
     let boundariesQuery = supabase
-      .from("rt_boundaries")
+      .from(boundariesTable)
       .select("rt_number, kelurahan, geometry")
-      .order("rt_number");
-    let casesQuery = supabase
-      .from("mapping_case_data")
-      .select("rt_number, disease_slug, case_count, period, updated_at")
-      .eq("period", activePeriod)
-      .eq("disease_slug", activeDisease)
       .order("rt_number");
 
     if (kelurahan) {
       boundariesQuery = boundariesQuery.eq("kelurahan", kelurahan);
-      casesQuery = casesQuery.eq("kelurahan", kelurahan);
     }
 
-    const [{ data: boundaries, error: boundariesError }, { data: cases, error: casesError }] =
-      await Promise.all([boundariesQuery, casesQuery]);
+    let cases = [];
+    let casesError = null;
+
+    if (caseTable === "mapping_case_data") {
+      let casesQuery = supabase
+        .from(caseTable)
+        .select("rt_number, disease_slug, case_count, period, updated_at, kelurahan")
+        .eq("period", activePeriod)
+        .eq("disease_slug", activeDisease)
+        .order("rt_number");
+
+      if (kelurahan) {
+        casesQuery = casesQuery.eq("kelurahan", kelurahan);
+      }
+
+      const result = await casesQuery;
+      cases = result.data || [];
+      casesError = result.error;
+    } else if (caseTable === "stunting_data") {
+      if (activeDisease === "stunting") {
+        let casesQuery = supabase
+          .from(caseTable)
+          .select("rt_number, stunting_count, period, updated_at, kelurahan")
+          .eq("period", activePeriod)
+          .order("rt_number");
+
+        if (kelurahan) {
+          casesQuery = casesQuery.eq("kelurahan", kelurahan);
+        }
+
+        const result = await casesQuery;
+        cases = result.data || [];
+        casesError = result.error;
+      } else {
+        cases = [];
+      }
+    }
+
+    const { data: boundaries, error: boundariesError } = await boundariesQuery;
 
     if (boundariesError) throw boundariesError;
     if (casesError) throw casesError;
 
     if (!boundaries || boundaries.length === 0) {
       if (kelurahan) {
-        console.warn(`[DataService] rt_boundaries kosong untuk kelurahan "${kelurahan}".`);
+        console.warn(`[DataService] ${boundariesTable} kosong untuk kelurahan "${kelurahan}".`);
         return { type: "FeatureCollection", features: [] };
       }
-      console.warn("[DataService] rt_boundaries kosong di Supabase, pakai data lokal.");
+      console.warn(`[DataService] ${boundariesTable} kosong di Supabase, pakai data lokal.`);
       return rtGeoJson;
     }
 
@@ -143,20 +237,74 @@ export async function submitCaseData({ rtNumber, diseaseSlug, caseCount, period,
   }
 
   try {
-    const { error } = await supabase.from("mapping_case_data").upsert(
-      {
+    const mappingCaseTableExists = await tableExists("mapping_case_data");
+    const legacyStuntingTableExists = await tableExists("stunting_data");
+
+    if (mappingCaseTableExists) {
+      const { error } = await supabase.from("mapping_case_data").upsert(
+        {
+          rt_number: rtNumber,
+          disease_slug: diseaseSlug || "stunting",
+          case_count: Number(caseCount),
+          period,
+          notes: notes || null,
+          kelurahan: kelurahan || "Gunung Sari Ulu",
+        },
+        { onConflict: "rt_number,disease_slug,period,kelurahan" }
+      );
+
+      if (error) throw error;
+      return { success: true, error: null };
+    }
+
+    if (legacyStuntingTableExists) {
+      if (diseaseSlug !== "stunting") {
+        return {
+          success: false,
+          error: "Supabase saat ini hanya mendukung schema stunting lama. Jalankan SQL multi-case atau gunakan penyakit 'stunting'.",
+        };
+      }
+
+      const normalizedKelurahan = kelurahan || "Gunung Sari Ulu";
+      const { data: existingRows, error: fetchError } = await supabase
+        .from("stunting_data")
+        .select("id")
+        .eq("rt_number", rtNumber)
+        .eq("period", period)
+        .eq("kelurahan", normalizedKelurahan)
+        .limit(1);
+
+      if (fetchError) throw fetchError;
+
+      if (existingRows && existingRows.length > 0) {
+        const { error } = await supabase
+          .from("stunting_data")
+          .update({
+            stunting_count: Number(caseCount),
+            notes: notes || null,
+          })
+          .eq("id", existingRows[0].id);
+
+        if (error) throw error;
+        return { success: true, error: null };
+      }
+
+      const { error } = await supabase.from("stunting_data").insert({
         rt_number: rtNumber,
-        disease_slug: diseaseSlug || "stunting",
-        case_count: Number(caseCount),
+        stunting_count: Number(caseCount),
         period,
         notes: notes || null,
-        kelurahan: kelurahan || "Gunung Sari Ulu",
-      },
-      { onConflict: "rt_number,disease_slug,period,kelurahan" }
-    );
+        kelurahan: normalizedKelurahan,
+      });
 
-    if (error) throw error;
-    return { success: true, error: null };
+      if (error) throw error;
+      return { success: true, error: null };
+    }
+
+    return {
+      success: false,
+      error: "Backend Supabase tidak memiliki tabel data kasus yang diperlukan. Periksa skema Supabase dan jalankan setup SQL yang sesuai.",
+    };
   } catch (err) {
     return { success: false, error: err.message };
   }
@@ -182,7 +330,12 @@ export async function getRTNumbers(kelurahan) {
     return rtGeoJson.features.map((f) => f.properties.rt_number).sort();
   }
 
-  let query = supabase.from("rt_boundaries").select("rt_number").order("rt_number");
+  const boundariesTable = await resolveTable(TABLE_CANDIDATES.boundaries);
+  if (!boundariesTable) {
+    return kelurahan ? [] : rtGeoJson.features.map((f) => f.properties.rt_number).sort();
+  }
+
+  let query = supabase.from(boundariesTable).select("rt_number").order("rt_number");
   if (kelurahan) query = query.eq("kelurahan", kelurahan);
 
   const { data, error } = await query;
