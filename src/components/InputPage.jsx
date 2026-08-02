@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
-  submitStuntingData,
+  submitCaseData,
+  fetchDiseaseDefinitions,
   getRTNumbers,
   getCurrentPeriod,
 } from "../lib/dataService";
@@ -12,18 +13,23 @@ export default function InputPage() {
   const { user } = useAuth();
   const kelurahan = user?.user_metadata?.kelurahan;
   const [rtNumbers, setRTNumbers] = useState([]);
+  const [diseaseOptions, setDiseaseOptions] = useState([]);
   const [formData, setFormData] = useState({
     rtNumber: "",
-    stuntingCount: "",
+    diseaseSlug: "stunting",
+    caseCount: "",
     period: currentPeriod,
     notes: "",
   });
 
-  const [status, setStatus] = useState(null); // { type: 'success' | 'error', message: '' }
+  const [status, setStatus] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activeDisease = diseaseOptions.find((disease) => disease.slug === formData.diseaseSlug) || diseaseOptions[0] || { slug: "stunting", display_name: "Stunting" };
 
   useEffect(() => {
     getRTNumbers(kelurahan).then(setRTNumbers);
+    fetchDiseaseDefinitions().then(setDiseaseOptions);
   }, [kelurahan]);
 
   const handleChange = (e) => {
@@ -38,7 +44,7 @@ export default function InputPage() {
       setStatus({ type: "error", message: "Pilih nomor RT terlebih dahulu." });
       return;
     }
-    if (formData.stuntingCount === "" || Number(formData.stuntingCount) < 0) {
+    if (formData.caseCount === "" || Number(formData.caseCount) < 0) {
       setStatus({ type: "error", message: "Masukkan jumlah kasus yang valid." });
       return;
     }
@@ -46,9 +52,10 @@ export default function InputPage() {
     setIsSubmitting(true);
     setStatus(null);
 
-    const result = await submitStuntingData({
+    const result = await submitCaseData({
       rtNumber: formData.rtNumber,
-      stuntingCount: Number(formData.stuntingCount),
+      diseaseSlug: formData.diseaseSlug,
+      caseCount: Number(formData.caseCount),
       period: formData.period,
       notes: formData.notes,
       kelurahan,
@@ -57,12 +64,12 @@ export default function InputPage() {
     if (result.success) {
       setStatus({
         type: "success",
-        message: `Data RT ${formData.rtNumber} berhasil disimpan!`,
+        message: `Data RT ${formData.rtNumber} untuk ${activeDisease.display_name || activeDisease.name} berhasil disimpan!`,
       });
-      // Reset form
       setFormData({
         rtNumber: "",
-        stuntingCount: "",
+        diseaseSlug: formData.diseaseSlug,
+        caseCount: "",
         period: currentPeriod,
         notes: "",
       });
@@ -77,60 +84,52 @@ export default function InputPage() {
     <div className="input-page">
       <div className="input-card">
         <div className="input-header">
-          <h2>Input Data Stunting</h2>
-          <p>Formulir pengisian data kasus stunting per RT oleh kader posyandu.</p>
+          <h2>Input Data Kasus</h2>
+          <p>Formulir pengisian data kasus per RT untuk berbagai penyakit yang dipetakan.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="input-form">
-          {/* Pilih RT */}
           <div className="form-group">
             <label htmlFor="rtNumber">Nomor RT</label>
-            <select
-              id="rtNumber"
-              name="rtNumber"
-              value={formData.rtNumber}
-              onChange={handleChange}
-              required
-            >
+            <select id="rtNumber" name="rtNumber" value={formData.rtNumber} onChange={handleChange} required>
               <option value="">-- Pilih RT --</option>
               {rtNumbers.map((rt) => (
-                <option key={rt} value={rt}>
-                  RT {rt}
+                <option key={rt} value={rt}>RT {rt}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="diseaseSlug">Jenis Kasus</label>
+            <select id="diseaseSlug" name="diseaseSlug" value={formData.diseaseSlug} onChange={handleChange} required>
+              {diseaseOptions.map((disease) => (
+                <option key={disease.slug} value={disease.slug}>
+                  {disease.display_name || disease.name}
                 </option>
               ))}
             </select>
           </div>
 
-          {/* Jumlah Kasus */}
           <div className="form-group">
-            <label htmlFor="stuntingCount">Jumlah Kasus Stunting</label>
+            <label htmlFor="caseCount">Jumlah Kasus {activeDisease.display_name || activeDisease.name}</label>
             <input
               type="number"
-              id="stuntingCount"
-              name="stuntingCount"
+              id="caseCount"
+              name="caseCount"
               min="0"
               max="100"
-              value={formData.stuntingCount}
+              value={formData.caseCount}
               onChange={handleChange}
               placeholder="0"
               required
             />
           </div>
 
-          {/* Periode */}
           <div className="form-group">
             <label htmlFor="period">Periode</label>
-            <input
-              type="month"
-              id="period"
-              name="period"
-              value={formData.period}
-              onChange={handleChange}
-              required
-            />
+            <input type="month" id="period" name="period" value={formData.period} onChange={handleChange} required />
           </div>
 
-          {/* Catatan */}
           <div className="form-group">
             <label htmlFor="notes">Catatan (opsional)</label>
             <textarea
@@ -143,27 +142,20 @@ export default function InputPage() {
             />
           </div>
 
-          {/* Status message */}
-          {status && (
-            <div className={`form-status ${status.type}`}>
-              {status.message}
-            </div>
-          )}
+          {status && <div className={`form-status ${status.type}`}>{status.message}</div>}
 
-          {/* Submit button */}
           <button type="submit" className="btn-submit" disabled={isSubmitting}>
             {isSubmitting ? "Menyimpan..." : "Simpan Data"}
           </button>
         </form>
       </div>
 
-      {/* Info panel */}
       <div className="input-info">
         <h3>Panduan Pengisian</h3>
         <div className="info-items">
           <div className="info-item">
             <span className="info-dot green"></span>
-            <span><strong>0 kasus</strong> = Hijau (tidak ada stunting)</span>
+            <span><strong>0 kasus</strong> = Hijau (tidak ada kasus)</span>
           </div>
           <div className="info-item">
             <span className="info-dot yellow"></span>
@@ -176,7 +168,7 @@ export default function InputPage() {
         </div>
         <p className="info-note">
           Data yang disimpan akan otomatis muncul di halaman peta.
-          Pastikan data sesuai dengan hasil pengukuran posyandu terbaru.
+          Pastikan data sesuai dengan hasil pencatatan posyandu terbaru.
         </p>
       </div>
     </div>

@@ -1,9 +1,10 @@
 import { getColorLabel } from "../lib/colors";
 
-export default function RTPopup({ feature }) {
+export default function RTPopup({ feature, diseaseName = "Kasus" }) {
   if (!feature) return null;
 
-  const { rt_number, stunting_count, kelurahan } = feature.properties;
+  const { rt_number, stunting_count, case_count, kelurahan } = feature.properties;
+  const count = Number(case_count ?? stunting_count ?? 0);
 
   return (
     <div className="rt-detail-panel">
@@ -12,10 +13,10 @@ export default function RTPopup({ feature }) {
         <strong>Kelurahan:</strong> {kelurahan}
       </p>
       <p>
-        <strong>Kasus Stunting:</strong> {stunting_count}
+        <strong>{diseaseName}:</strong> {count}
       </p>
       <p>
-        <strong>Kategori:</strong> {getColorLabel(stunting_count)}
+        <strong>Kategori:</strong> {getColorLabel(count)}
       </p>
     </div>
   );

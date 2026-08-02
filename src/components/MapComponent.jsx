@@ -3,9 +3,7 @@ import { MapContainer, ImageOverlay, GeoJSON, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import { getStyle } from "../lib/colors";
 import Legend from "./Legend";
-// Latar peta yang sudah dikompres & di-resize khusus untuk tampilan /peta
-// (bukan yang dipakai DigitizerPage -- itu tetap pakai gambar resolusi asli
-// karena butuh presisi tinggi untuk menggambar batas RT).
+
 const mapReference = "/peta-map-bg.webp";
 
 const imageBounds = [
@@ -13,7 +11,6 @@ const imageBounds = [
   [-1.249, 116.858],
 ];
 
-// Component to fit map bounds to GeoJSON data
 function FitBounds({ geoJsonData }) {
   const map = useMap();
 
@@ -31,8 +28,7 @@ function FitBounds({ geoJsonData }) {
   return null;
 }
 
-export default function MapComponent({ geoJsonData, onFeatureClick }) {
-  // Default center (Gunung Sari Ulu, Balikpapan Tengah) — will be overridden by FitBounds
+export default function MapComponent({ geoJsonData, onFeatureClick, diseaseName = "Stunting" }) {
   const defaultCenter = [-1.2569, 116.8468];
   const defaultZoom = 16;
 
@@ -49,20 +45,14 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
       zoomSnap={0}
       zoomDelta={0.25}
     >
-      {/* Reference map image for Gunung Sari Ulu */}
-      <ImageOverlay
-        url={mapReference}
-        bounds={imageBounds}
-        opacity={1}
-        zIndex={0}
-      />
+      <ImageOverlay url={mapReference} bounds={imageBounds} opacity={1} zIndex={0} />
 
-      {/* GeoJSON choropleth layer */}
       <GeoJSON
         data={geoJsonData}
-        style={getStyle}
+        style={(feature) => getStyle(feature)}
         onEachFeature={(feature, layer) => {
-          // Hover effects
+          const caseCount = Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0);
+
           layer.on({
             mouseover: (e) => {
               const target = e.target;
@@ -82,12 +72,11 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
             },
           });
 
-          // Bind popup
           layer.bindPopup(
             `<div class="rt-popup">
               <h3>RT ${feature.properties.rt_number}</h3>
               <p><strong>Kelurahan:</strong> ${feature.properties.kelurahan}</p>
-              <p><strong>Kasus Stunting:</strong> ${feature.properties.stunting_count}</p>
+              <p><strong>${diseaseName}:</strong> ${caseCount}</p>
             </div>`,
             { className: "custom-popup" }
           );
@@ -101,11 +90,8 @@ export default function MapComponent({ geoJsonData, onFeatureClick }) {
         }}
       />
 
-      {/* Fit map to data bounds */}
       <FitBounds geoJsonData={geoJsonData} />
-
-      {/* Legend */}
-      <Legend />
+      <Legend title={diseaseName} />
     </MapContainer>
   );
 }

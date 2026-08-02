@@ -3,7 +3,7 @@ import { useMap } from "react-leaflet";
 import L from "leaflet";
 import { getColor } from "../lib/colors";
 
-export default function Legend() {
+export default function Legend({ title = "Kasus" }) {
   const map = useMap();
 
   useEffect(() => {
@@ -18,14 +18,10 @@ export default function Legend() {
         { label: "3 >", color: getColor(3) },
       ];
 
-      // Dibangun lewat DOM API (bukan div.innerHTML = "...") supaya gak
-      // kena error "This document requires 'TrustedHTML' assignment" di
-      // browser/WebView yang menegakkan Trusted Types (ini yang bikin peta
-      // gagal render total di beberapa HP).
-      const title = document.createElement("div");
-      title.className = "legend-title";
-      title.textContent = "Kasus Stunting";
-      div.appendChild(title);
+      const titleElement = document.createElement("div");
+      titleElement.className = "legend-title";
+      titleElement.textContent = title;
+      div.appendChild(titleElement);
 
       grades.forEach((g) => {
         const item = document.createElement("div");
@@ -52,7 +48,7 @@ export default function Legend() {
     return () => {
       legend.remove();
     };
-  }, [map]);
+  }, [map, title]);
 
   return null;
 }

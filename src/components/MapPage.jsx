@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import MapComponent from "./MapComponent";
-import { fetchRTData, getCurrentPeriod } from "../lib/dataService";
+import { fetchDiseaseDefinitions, fetchRTData, getCurrentPeriod } from "../lib/dataService";
 import { useAuth } from "../lib/useAuth";
 
 // Label bulan dalam Bahasa Indonesia untuk ditampilkan di sidebar
@@ -22,13 +22,13 @@ export default function MapPage() {
   const [geoJsonData, setGeoJsonData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState(getCurrentPeriod());
+  const [diseaseOptions, setDiseaseOptions] = useState([]);
+  const [diseaseSlug, setDiseaseSlug] = useState("stunting");
 
-  // peta-map-bg.webp adalah elemen LCP khusus untuk rute ini, tapi baru
-  // dirender (lewat MapComponent) setelah data RT selesai di-fetch. Supaya
-  // gak nunggu fetch itu kelar dulu baru mulai unduh gambarnya, kita pasang
-  // preload begitu MapPage mount -- jalan paralel dengan fetch data.
-  // (Preload ini gak lagi dipasang global di index.html supaya halaman
-  // lain, mis. Login, gak ikut menanggung 472 KB yang gak dia butuhkan.)
+  const activeDisease = useMemo(() => {
+    return diseaseOptions.find((disease) => disease.slug === diseaseSlug) || diseaseOptions[0] || { slug: "stunting", display_name: "Stunting" };
+  }, [diseaseOptions, diseaseSlug]);
+
   useEffect(() => {
     const link = document.createElement("link");
     link.rel = "preload";
@@ -40,10 +40,14 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
+    fetchDiseaseDefinitions().then(setDiseaseOptions);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadData() {
       setLoading(true);
-      const data = await fetchRTData(kelurahan, period);
+      const data = await fetchRTData(kelurahan, period, diseaseSlug);
       if (cancelled) return;
       setGeoJsonData(data);
       setLoading(false);
@@ -52,22 +56,26 @@ export default function MapPage() {
     return () => {
       cancelled = true;
     };
-  }, [kelurahan, period]);
+  }, [kelurahan, period, diseaseSlug]);
 
   const stats = useMemo(() => {
     if (!geoJsonData?.features) return null;
     const features = geoJsonData.features;
     const totalRT = features.length;
-    const totalStunting = features.reduce(
-      (sum, f) => sum + f.properties.stunting_count,
+    const totalCases = features.reduce(
+      (sum, feature) => sum + Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0),
       0
     );
-    const rtHijau = features.filter((f) => f.properties.stunting_count === 0).length;
-    const rtKuning = features.filter(
-      (f) => f.properties.stunting_count >= 1 && f.properties.stunting_count <= 2
-    ).length;
-    const rtMerah = features.filter((f) => f.properties.stunting_count >= 3).length;
-    return { totalRT, totalStunting, rtHijau, rtKuning, rtMerah };
+    const rtHijau = features.filter((feature) => Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0) === 0).length;
+    const rtKuning = features.filter((feature) => {
+      const count = Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0);
+      return count >= 1 && count <= 2;
+    }).length;
+    const rtMerah = features.filter((feature) => {
+      const count = Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0);
+      return count >= 3;
+    }).length;
+    return { totalRT, totalCases, rtHijau, rtKuning, rtMerah };
   }, [geoJsonData]);
 
   if (!geoJsonData || !stats) {
@@ -90,10 +98,23 @@ export default function MapPage() {
 
   return (
     <div className="map-page">
-      {/* Sidebar */}
       <aside className="sidebar">
         <div className="sidebar-section">
           <h2>Ringkasan</h2>
+          <div className="sidebar-controls">
+            <label htmlFor="disease-select">Jenis kasus</label>
+            <select
+              id="disease-select"
+              value={diseaseSlug}
+              onChange={(event) => setDiseaseSlug(event.target.value)}
+            >
+              {diseaseOptions.map((disease) => (
+                <option key={disease.slug} value={disease.slug}>
+                  {disease.display_name || disease.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="period-picker">
             <label htmlFor="periode-peta">Periode data</label>
             <input
@@ -112,7 +133,7 @@ export default function MapPage() {
               <span className="stat-label">Total RT</span>
             </div>
             <div className="stat-card">
-              <span className="stat-number">{stats.totalStunting}</span>
+              <span className="stat-number">{stats.totalCases}</span>
               <span className="stat-label">Total Kasus</span>
             </div>
           </div>
@@ -143,28 +164,18 @@ export default function MapPage() {
           <h2>Daftar RT</h2>
           {geoJsonData.features.length === 0 && (
             <p style={{ fontSize: "0.85rem", color: "#888" }}>
-              Belum ada data batas RT untuk wilayah akun ini. Hubungi admin untuk menambahkan data
-              lewat halaman Digitizer.
+              Belum ada data batas RT untuk wilayah akun ini. Hubungi admin untuk menambahkan data lewat halaman Digitizer.
             </p>
           )}
           <div className="rt-list">
             {geoJsonData.features
-              .sort(
-                (a, b) =>
-                  Number(a.properties.rt_number) -
-                  Number(b.properties.rt_number)
-              )
-              .map((f) => {
-                const count = f.properties.stunting_count;
-                const colorClass =
-                  count === 0
-                    ? "rt-green"
-                    : count <= 2
-                    ? "rt-yellow"
-                    : "rt-red";
+              .sort((a, b) => Number(a.properties.rt_number) - Number(b.properties.rt_number))
+              .map((feature) => {
+                const count = Number(feature.properties.case_count ?? feature.properties.stunting_count ?? 0);
+                const colorClass = count === 0 ? "rt-green" : count <= 2 ? "rt-yellow" : "rt-red";
                 return (
-                  <div key={f.properties.rt_number} className={`rt-item ${colorClass}`}>
-                    <span className="rt-num">RT {f.properties.rt_number}</span>
+                  <div key={feature.properties.rt_number} className={`rt-item ${colorClass}`}>
+                    <span className="rt-num">RT {feature.properties.rt_number}</span>
                     <span className="rt-count">{count} kasus</span>
                   </div>
                 );
@@ -173,9 +184,12 @@ export default function MapPage() {
         </div>
       </aside>
 
-      {/* Map */}
       <div className="map-wrapper">
-        <MapComponent geoJsonData={geoJsonData} />
+        <MapComponent
+          geoJsonData={geoJsonData}
+          diseaseName={activeDisease.display_name || activeDisease.name}
+          diseaseSlug={diseaseSlug}
+        />
       </div>
     </div>
   );
