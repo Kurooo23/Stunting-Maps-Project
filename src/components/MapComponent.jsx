@@ -4,6 +4,8 @@ import "leaflet/dist/leaflet.css";
 import { getStyle } from "../lib/colors";
 import Legend from "./Legend";
 
+const mapReference = "/peta-map-bg.webp";
+
 const imageBounds = [
   [-1.267, 116.835],
   [-1.249, 116.858],
@@ -29,10 +31,6 @@ function FitBounds({ geoJsonData }) {
 export default function MapComponent({ geoJsonData, onFeatureClick, diseaseName = "Stunting" }) {
   const defaultCenter = [-1.2569, 116.8468];
   const defaultZoom = 16;
-  const mapReference =
-    typeof window !== "undefined" && window.matchMedia("(max-width: 480px)").matches
-      ? "/peta-map-bg-mobile.webp"
-      : "/peta-map-bg.webp";
 
   return (
     <MapContainer
