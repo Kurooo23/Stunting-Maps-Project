@@ -13,47 +13,110 @@ import { useEffect, useRef } from "react";
 // ============================================================
 
 const ACTIVITY_EVENTS = ["mousemove", "mousedown", "keydown", "scroll", "touchstart"];
+const STORAGE_KEY = "posyandu:last-activity";
+
+function readStoredActivity() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return Date.now();
+  }
+
+  const stored = Number(window.localStorage.getItem(STORAGE_KEY));
+  return Number.isFinite(stored) ? stored : Date.now();
+}
+
+function persistActivity(timestamp) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, String(timestamp));
+}
+
+function clearStoredActivity() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY);
+}
 
 export function useIdleLogout(active, onIdle, timeoutMs) {
-  const lastActivityRef = useRef(Date.now());
+  const lastActivityRef = useRef(readStoredActivity());
+  const idleTriggeredRef = useRef(false);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      idleTriggeredRef.current = false;
+      clearStoredActivity();
+      return;
+    }
 
     let timeoutId;
 
+    const clearTimer = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = undefined;
+      }
+    };
+
+    const handleIdle = async () => {
+      if (idleTriggeredRef.current) return;
+
+      idleTriggeredRef.current = true;
+      clearTimer();
+      clearStoredActivity();
+      await onIdle();
+    };
+
     const scheduleTimeout = () => {
-      clearTimeout(timeoutId);
-      timeoutId = setTimeout(onIdle, timeoutMs);
+      clearTimer();
+      timeoutId = setTimeout(() => {
+        void handleIdle();
+      }, timeoutMs);
     };
 
     const markActivity = () => {
       lastActivityRef.current = Date.now();
+      persistActivity(lastActivityRef.current);
       scheduleTimeout();
+    };
+
+    const checkIdle = () => {
+      const elapsed = Date.now() - lastActivityRef.current;
+      if (elapsed >= timeoutMs) {
+        void handleIdle();
+      } else {
+        scheduleTimeout();
+      }
     };
 
     // Timer browser bisa "dibekukan" kalau tab disembunyikan lama demi
     // hemat baterai -- begitu tab aktif lagi, cek manual apakah waktu
     // idle sebenarnya sudah kelewat dari seharusnya.
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
-      const elapsed = Date.now() - lastActivityRef.current;
-      if (elapsed >= timeoutMs) {
-        onIdle();
-      } else {
-        scheduleTimeout();
+      if (document.visibilityState === "visible") {
+        checkIdle();
       }
     };
 
-    ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, markActivity));
+    ACTIVITY_EVENTS.forEach((event) => window.addEventListener(event, markActivity, { passive: true }));
+    window.addEventListener("focus", checkIdle);
+    window.addEventListener("pageshow", checkIdle);
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
-    lastActivityRef.current = Date.now();
-    scheduleTimeout();
+    lastActivityRef.current = readStoredActivity();
+    if (Date.now() - lastActivityRef.current >= timeoutMs) {
+      void handleIdle();
+    } else {
+      scheduleTimeout();
+    }
 
     return () => {
-      clearTimeout(timeoutId);
+      clearTimer();
       ACTIVITY_EVENTS.forEach((event) => window.removeEventListener(event, markActivity));
+      window.removeEventListener("focus", checkIdle);
+      window.removeEventListener("pageshow", checkIdle);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [active, onIdle, timeoutMs]);
