@@ -5,6 +5,14 @@ import rtGeoJson from "../data/rtGeoJson";
 // Data Service Layer
 // ============================================================
 // Handles fetching and inserting mapping data from Supabase.
+//
+// Skema Supabase (lihat supabase-compat-mapping.sql):
+//   - public.mapping_rt_boundaries          -> batas RT (tetap satu tabel)
+//   - public.case_<slug>                    -> 1 tabel per kasus
+//   - public.case_<slug>_view                -> 1 view per kasus (latest per RT,
+//                                               dipakai untuk kebutuhan lain / dashboard,
+//                                               BUKAN untuk fetch by-period di sini karena
+//                                               view tidak difilter per periode tertentu)
 // ============================================================
 
 const isSupabaseConfigured = () => {
@@ -24,12 +32,13 @@ const DEFAULT_DISEASES = [
   { slug: "ibu_hamil", name: "Ibu Hamil", display_name: "Ibu Hamil" },
 ];
 
+const DISEASE_SLUGS = new Set(DEFAULT_DISEASES.map((d) => d.slug));
+
 const normalizeRTNumber = (value) => String(value).trim().padStart(2, "0");
 
+// Gunakan hanya tabel legacy `rt_boundaries` untuk data batas RT.
 const TABLE_CANDIDATES = {
-  boundaries: ["mapping_rt_boundaries", "rt_boundaries"],
-  cases: ["mapping_case_data", "stunting_data"],
-  diseaseDefinitions: ["mapping_disease_definitions"],
+  boundaries: ["rt_boundaries"],
 };
 
 const tableExistenceCache = new Map();
@@ -76,6 +85,17 @@ async function resolveTable(candidates = []) {
   return null;
 }
 
+/**
+ * Nama tabel kasus per penyakit, sesuai supabase-compat-mapping.sql:
+ * case_stunting, case_pneumonia, case_tbc, case_hipertensi, case_dm,
+ * case_dbd, case_diare, case_pasien_immobilisasi, case_ibu_hamil.
+ * Slug yang tidak dikenal di-fallback ke "stunting".
+ */
+function getCaseTableName(diseaseSlug) {
+  const slug = DISEASE_SLUGS.has(diseaseSlug) ? diseaseSlug : "stunting";
+  return `case_${slug}`;
+}
+
 const toGeometry = (geometry) => (
   typeof geometry === "string" ? JSON.parse(geometry) : geometry
 );
@@ -101,6 +121,7 @@ const toGeoJson = (boundaries = [], cases = [], fallbackKelurahan, diseaseSlug =
           kelurahan: boundary.kelurahan || fallbackKelurahan || "Gunung Sari Ulu",
           period: caseData?.period,
           updated_at: caseData?.updated_at,
+          notes: caseData?.notes,
           disease_slug: diseaseSlug,
         },
         geometry: toGeometry(boundary.geometry),
@@ -109,33 +130,12 @@ const toGeoJson = (boundaries = [], cases = [], fallbackKelurahan, diseaseSlug =
   };
 };
 
+/**
+ * Daftar jenis kasus untuk dropdown. Sudah tidak ada tabel
+ * mapping_disease_definitions di skema baru, jadi ini statis saja.
+ */
 export async function fetchDiseaseDefinitions() {
-  if (!isSupabaseConfigured()) {
-    return DEFAULT_DISEASES;
-  }
-
-  const tableName = await resolveTable(TABLE_CANDIDATES.diseaseDefinitions);
-  if (!tableName) {
-    return DEFAULT_DISEASES;
-  }
-
-  try {
-    const { data, error } = await supabase
-      .from(tableName)
-      .select("slug, name, display_name")
-      .eq("is_active", true)
-      .order("name");
-
-    if (error) throw error;
-    return (data && data.length > 0 ? data : DEFAULT_DISEASES).map((disease) => ({
-      slug: disease.slug,
-      name: disease.name,
-      display_name: disease.display_name || disease.name,
-    }));
-  } catch (err) {
-    console.error("[DataService] Error fetching disease definitions:", err.message);
-    return DEFAULT_DISEASES;
-  }
+  return DEFAULT_DISEASES;
 }
 
 /**
@@ -157,7 +157,8 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
       return rtGeoJson;
     }
 
-    const caseTable = await resolveTable(TABLE_CANDIDATES.cases);
+    const caseTable = getCaseTableName(activeDisease);
+    const caseTableExists = await tableExists(caseTable);
 
     let boundariesQuery = supabase
       .from(boundariesTable)
@@ -171,12 +172,11 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
     let cases = [];
     let casesError = null;
 
-    if (caseTable === "mapping_case_data") {
+    if (caseTableExists) {
       let casesQuery = supabase
         .from(caseTable)
-        .select("rt_number, disease_slug, case_count, period, updated_at, kelurahan")
+        .select("rt_number, case_count, period, notes, updated_at, kelurahan")
         .eq("period", activePeriod)
-        .eq("disease_slug", activeDisease)
         .order("rt_number");
 
       if (kelurahan) {
@@ -186,24 +186,8 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
       const result = await casesQuery;
       cases = result.data || [];
       casesError = result.error;
-    } else if (caseTable === "stunting_data") {
-      if (activeDisease === "stunting") {
-        let casesQuery = supabase
-          .from(caseTable)
-          .select("rt_number, stunting_count, period, updated_at, kelurahan")
-          .eq("period", activePeriod)
-          .order("rt_number");
-
-        if (kelurahan) {
-          casesQuery = casesQuery.eq("kelurahan", kelurahan);
-        }
-
-        const result = await casesQuery;
-        cases = result.data || [];
-        casesError = result.error;
-      } else {
-        cases = [];
-      }
+    } else {
+      console.warn(`[DataService] Tabel "${caseTable}" tidak ditemukan. Jalankan supabase-compat-mapping.sql.`);
     }
 
     const { data: boundaries, error: boundariesError } = await boundariesQuery;
@@ -227,6 +211,10 @@ export async function fetchRTData(kelurahan, period, diseaseSlug = "stunting") {
   }
 }
 
+/**
+ * Simpan / update data kasus untuk satu RT + satu jenis kasus + satu periode.
+ * Menulis ke tabel case_<slug> masing-masing (bukan lagi 1 tabel gabungan).
+ */
 export async function submitCaseData({ rtNumber, diseaseSlug, caseCount, period, notes, kelurahan }) {
   if (!isSupabaseConfigured()) {
     return {
@@ -235,75 +223,31 @@ export async function submitCaseData({ rtNumber, diseaseSlug, caseCount, period,
     };
   }
 
+  const caseTable = getCaseTableName(diseaseSlug || "stunting");
+
   try {
-    const mappingCaseTableExists = await tableExists("mapping_case_data");
-    const legacyStuntingTableExists = await tableExists("stunting_data");
+    const caseTableExists = await tableExists(caseTable);
 
-    if (mappingCaseTableExists) {
-      const { error } = await supabase.from("mapping_case_data").upsert(
-        {
-          rt_number: rtNumber,
-          disease_slug: diseaseSlug || "stunting",
-          case_count: Number(caseCount),
-          period,
-          notes: notes || null,
-          kelurahan: kelurahan || "Gunung Sari Ulu",
-        },
-        { onConflict: "rt_number,disease_slug,period,kelurahan" }
-      );
-
-      if (error) throw error;
-      return { success: true, error: null };
+    if (!caseTableExists) {
+      return {
+        success: false,
+        error: `Tabel "${caseTable}" tidak ditemukan di Supabase. Jalankan supabase-compat-mapping.sql terlebih dahulu.`,
+      };
     }
 
-    if (legacyStuntingTableExists) {
-      if (diseaseSlug !== "stunting") {
-        return {
-          success: false,
-          error: "Supabase saat ini hanya mendukung schema stunting lama. Jalankan SQL multi-case atau gunakan penyakit 'stunting'.",
-        };
-      }
-
-      const normalizedKelurahan = kelurahan || "Gunung Sari Ulu";
-      const { data: existingRows, error: fetchError } = await supabase
-        .from("stunting_data")
-        .select("id")
-        .eq("rt_number", rtNumber)
-        .eq("period", period)
-        .eq("kelurahan", normalizedKelurahan)
-        .limit(1);
-
-      if (fetchError) throw fetchError;
-
-      if (existingRows && existingRows.length > 0) {
-        const { error } = await supabase
-          .from("stunting_data")
-          .update({
-            stunting_count: Number(caseCount),
-            notes: notes || null,
-          })
-          .eq("id", existingRows[0].id);
-
-        if (error) throw error;
-        return { success: true, error: null };
-      }
-
-      const { error } = await supabase.from("stunting_data").insert({
+    const { error } = await supabase.from(caseTable).upsert(
+      {
         rt_number: rtNumber,
-        stunting_count: Number(caseCount),
+        case_count: Number(caseCount),
         period,
         notes: notes || null,
-        kelurahan: normalizedKelurahan,
-      });
+        kelurahan: kelurahan || "Gunung Sari Ulu",
+      },
+      { onConflict: "rt_number,period,kelurahan" }
+    );
 
-      if (error) throw error;
-      return { success: true, error: null };
-    }
-
-    return {
-      success: false,
-      error: "Backend Supabase tidak memiliki tabel data kasus yang diperlukan. Periksa skema Supabase dan jalankan setup SQL yang sesuai.",
-    };
+    if (error) throw error;
+    return { success: true, error: null };
   } catch (err) {
     return { success: false, error: err.message };
   }
