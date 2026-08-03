@@ -76,9 +76,14 @@ export function useIdleLogout(active, onIdle, timeoutMs) {
       }, timeoutMs);
     };
 
+    const resetActivity = () => {
+      const now = Date.now();
+      lastActivityRef.current = now;
+      persistActivity(now);
+    };
+
     const markActivity = () => {
-      lastActivityRef.current = Date.now();
-      persistActivity(lastActivityRef.current);
+      resetActivity();
       scheduleTimeout();
     };
 

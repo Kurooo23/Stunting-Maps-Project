@@ -1,8 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AuthContext } from "./AuthContext";
-import { useIdleLogout } from "./useIdleLogout";
-
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000;
 
 let supabasePromise;
 function getSupabase() {
@@ -63,9 +60,19 @@ export function AuthProvider({ children }) {
       password,
     });
 
-    if (!error) {
-      setUser(data.user);
+    const signedUser = data?.user ?? data?.session?.user;
+    if (!error && signedUser) {
+      setUser(signedUser);
       return { success: true, errorCode: null };
+    }
+
+    if (!error) {
+      console.error("[Auth] signIn succeeded but no user was returned", data);
+      return {
+        success: false,
+        errorCode: "unknown",
+        error: "Login gagal: respons Supabase tidak berisi data pengguna.",
+      };
     }
 
     const message = (error.message || "").toLowerCase();
@@ -104,17 +111,6 @@ export function AuthProvider({ children }) {
     await supabase.auth.signOut();
     setUser(null);
   };
-
-  const handleIdle = useCallback(async () => {
-    try {
-      const supabase = await getSupabase();
-      await supabase.auth.signOut();
-    } finally {
-      setUser(null);
-    }
-  }, []);
-
-  useIdleLogout(Boolean(user), handleIdle, IDLE_TIMEOUT_MS);
 
   return (
     <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
