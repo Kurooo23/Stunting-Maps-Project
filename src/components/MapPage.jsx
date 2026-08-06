@@ -24,6 +24,7 @@ export default function MapPage() {
   const [period, setPeriod] = useState(getCurrentPeriod());
   const [diseaseOptions, setDiseaseOptions] = useState([]);
   const [diseaseSlug, setDiseaseSlug] = useState("stunting");
+  const [dataVersion, setDataVersion] = useState(0);
 
   const activeDisease = useMemo(() => {
     return diseaseOptions.find((disease) => disease.slug === diseaseSlug) || diseaseOptions[0] || { slug: "stunting", display_name: "Stunting" };
@@ -50,6 +51,7 @@ export default function MapPage() {
       const data = await fetchRTData(kelurahan, period, diseaseSlug);
       if (cancelled) return;
       setGeoJsonData(data);
+      setDataVersion((v) => v + 1);
       setLoading(false);
     }
     loadData();
@@ -189,6 +191,7 @@ export default function MapPage() {
           geoJsonData={geoJsonData}
           diseaseName={activeDisease.display_name || activeDisease.name}
           diseaseSlug={diseaseSlug}
+          mapKey={dataVersion}
         />
       </div>
     </div>

@@ -52,7 +52,7 @@ export default function Navbar() {
         </div>
         <div className="header-left">
           <p className="brand-kicker">Posyandu digital</p>
-          <h1>Peta Stunting</h1>
+          <h1>PETA PERSEBARAN PENYAKIT</h1>
           <span className="header-subtitle">{kelurahan} &middot; {kota}</span>
         </div>
       </div>

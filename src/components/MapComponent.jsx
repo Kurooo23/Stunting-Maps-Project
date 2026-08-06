@@ -26,7 +26,7 @@ function FitBounds({ geoJsonData }) {
   return null;
 }
 
-export default function MapComponent({ geoJsonData, onFeatureClick, diseaseName = "Stunting" }) {
+export default function MapComponent({ geoJsonData, onFeatureClick, diseaseName = "Stunting", mapKey }) {
   const defaultCenter = [-1.2569, 116.8468];
   const defaultZoom = 16;
   const mapReference =
@@ -50,6 +50,7 @@ export default function MapComponent({ geoJsonData, onFeatureClick, diseaseName 
       <ImageOverlay url={mapReference} bounds={imageBounds} opacity={1} zIndex={0} />
 
       <GeoJSON
+        key={mapKey}
         data={geoJsonData}
         style={(feature) => getStyle(feature)}
         onEachFeature={(feature, layer) => {
