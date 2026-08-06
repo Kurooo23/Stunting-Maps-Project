@@ -757,11 +757,13 @@
   .app {
     height: auto;
     min-height: 100vh;
+    overflow: visible;
   }
 
   .app-body {
     flex-direction: column;
     min-height: 0;
+    overflow: visible;
   }
 
   .map-page {
