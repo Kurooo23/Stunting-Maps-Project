@@ -21,6 +21,7 @@
   height: 100dvh;
   background: var(--paper);
   overflow: hidden;
+  position: relative;
 }
 
 .login-shell {
@@ -372,6 +373,17 @@
   color: var(--muted);
 }
 
+.login-signature {
+  position: absolute;
+  left: 48px;
+  bottom: 24px;
+  z-index: 1;
+  margin: 0;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.01em;
+}
+
 /* ============================================================
    Responsif
    ============================================================ */
@@ -401,6 +413,10 @@
     padding: 28px 24px;
     align-items: flex-start;
     padding-top: 36px;
+  }
+
+  .login-signature {
+    display: none;
   }
 }
 

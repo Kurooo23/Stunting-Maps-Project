@@ -51,7 +51,7 @@ export default function Navbar() {
           <span />
         </div>
         <div className="header-left">
-          <p className="brand-kicker">Posyandu digital</p>
+          <p className="brand-kicker">Peta digital</p>
           <h1>PETA PERSEBARAN PENYAKIT</h1>
           <span className="header-subtitle">{kelurahan} &middot; {kota}</span>
         </div>

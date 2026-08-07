@@ -9,7 +9,7 @@
 
 export function getColor(caseCount) {
   if (caseCount === 0) return "#18aa3b";
-  if (caseCount <= 2) return "#ffd21f";
+  if (caseCount <= 2) return "#c49c00";
   return "#ef3030";
 }
 

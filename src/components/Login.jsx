@@ -183,13 +183,13 @@ export default function Login() {
             <span className="login-brand-mark">
               <LeafIcon />
             </span>
-            <span className="login-brand-name">Posyandu Digital</span>
+            <span className="login-brand-name">Peta Digital</span>
           </div>
 
           <div className="login-visual-content">
-            <span className="login-eyebrow">Untuk Kader Posyandu &amp; Puskesmas</span>
+            <span className="login-eyebrow">UNTUK PUSKESMAS KELURAHAN GUNUNG SARI ULU</span>
             <h1 className="login-headline">
-              Halo, <em>Kader.</em>
+              Halo, <em>Nakes.</em>
             </h1>
             <p className="login-tagline">
               Terima kasih sudah menjaga tumbuh kembang anak-anak di wilayahmu.
@@ -199,7 +199,7 @@ export default function Login() {
             <div className="login-chips">
               <span className="login-chip">Peta per RT</span>
               <span className="login-chip">Sesuai wilayah kerja akun Anda</span>
-              <span className="login-chip">Balikpapan</span>
+              <span className="login-chip">Balikpapan Tengah</span>
             </div>
           </div>
         </div>
@@ -277,6 +277,10 @@ export default function Login() {
           </div>
         </div>
       </div>
+
+      <p className="login-signature">
+        Website ini dibuat oleh tim KKN 52 Universitas Mulawarman
+      </p>
     </div>
   );
 }
